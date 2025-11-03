@@ -50,6 +50,7 @@ import sys
 import math
 import copy
 from datetime import datetime
+import random
 import uuid as UUID
 
 import statistics
@@ -91,9 +92,11 @@ TV_MATRIX_COMMENT_LINE_PREFIX   = "#"
 NEWLINE_STR = "\n"
 
 # These separate variables in a list, or rows of variables in a sequence.
-TIMEVALUE_ID_DATA_SEPARATOR     = ")"
+TIMEVALUE_TIMELINE_PROPS_OPEN   = "["
+TIMEVALUE_TIMELINE_PROPS_CLOSE  = "]"
 TIMEVALUE_LIST_SEPARATOR        = ";"
 TIMEVALUE_PART_SEPARATOR        = "/"
+TIMEVALUE_NAMEVALUE_SEPARATOR   = "="
 
 
 
@@ -124,22 +127,30 @@ TV_MATRIX_COMPARISON_GREATER_THAN_EQUAL     = ">="
 MIN_NUMBER_VALUES_FOR_COVARIANT = 3
 
 
-
 #------------------------------------------------
 # These are ops for MakeTimeValueMatrixFromSelectionsOfTDF
 #------------------------------------------------
-TV_MATRIX_TDF_SELECT_ALL                        = "All"
-TV_MATRIX_TDF_SELECT_BELOW_MAX_THEN_REBOUND     = "BelowMaxThenRebound"
-TV_MATRIX_TDF_SELECT_BELOW_MAX_AND_STAYOVER_MIN = "BelowMaxStayOverMin"
-TV_MATRIX_TDF_SELECT_BELOW_MAX_AND_BELOW_MIN    = "BelowMaxAndBelowMin"
+TV_MATRIX_TDF_SELECT_ALL                                = "All"
+TV_MATRIX_TDF_SELECT_IN_RANGE_THEN_LEAVE_THROUGH_TOP    = "InRangeThenLeaveThruTop"
+TV_MATRIX_TDF_SELECT_REMAIN_IN_RANGE                    = "InRange"
+TV_MATRIX_TDF_SELECT_IN_RANGE_THEN_LEAVE_THROUGH_BOTTOM = "InRangeThenLeaveThruBottom"
 
 
 #------------------------------------------------
-# These are ops for xxxxx
+# These are ops for MakeHistogramOfTimelineProperties
 #------------------------------------------------
 TV_MATRIX_TIMELINE_PROPERTY_LENGTH              = "len"
 TV_MATRIX_TIMELINE_PROPERTY_DURATION            = "dur"
 
+
+#------------------------------------------------
+# Some standard line properties
+#------------------------------------------------
+TV_MATRIX_TIMELINE_BASE_DAY_PROPERTY            = "baseDay"
+TV_MATRIX_TIMELINE_HEALTHY_THRESHOLD_PROPERTY   = "threshold"
+TV_MATRIX_TIMELINE_LAST_HEALTHY_DAY_PROPERTY    = "lastHealthyDay"
+TV_MATRIX_TIMELINE_LAST_HEALTHY_VALUE_PROPERTY  = "lastHealthyVale"
+TV_MATRIX_TIMELINE_HAD_HEALTHY_DAY_PROPERTY     = "HadHealthyDay"
 
 
 
@@ -187,6 +198,26 @@ class TimeValueMatrix():
     def GetNumRows(self):
         return len(self.timelineList)
 
+    def GetRowData(self, rowNum):
+        if ((rowNum < 0) or (rowNum >= len(self.timelineList))):
+            return [], []
+        timelineEntry = self.timelineList[rowNum]
+        return timelineEntry['d'], timelineEntry['v']
+
+    def GetRowProp(self, rowNum, propName):
+        if ((rowNum < 0) or (rowNum >= len(self.timelineList))):
+            return None
+        timelineEntry = self.timelineList[rowNum]
+        if (propName in timelineEntry['p']):
+            return timelineEntry['p'][propName]
+        else:
+            return None
+
+    def SetRowProp(self, rowNum, propName, propValue):
+        if ((rowNum < 0) or (rowNum >= len(self.timelineList))):
+            return
+        timelineEntry = self.timelineList[rowNum]
+        timelineEntry['p'][propName] = propValue
 
 
 
@@ -232,7 +263,6 @@ class TimeValueMatrix():
                 sys.exit(0)
         # End - for currentVal in valueList:
     # End - CheckEntry()
-
 
 
 
@@ -315,7 +345,7 @@ class TimeValueMatrix():
         self.timelineList = []
         self.valueName = valueName
         self.derivedFromFileUUID = srcTDF.GetFileUUIDStr()
-
+        
         # Iterate over every timeline
         fFoundTimeline = srcTDF.GotoFirstTimeline()
         while (fFoundTimeline):
@@ -333,20 +363,18 @@ class TimeValueMatrix():
 
             dayNumList = [0] * numEntries
             secNumList = [0] * numEntries
-            contextStrList = [""] * numEntries
             valueList = [0.0] * numEntries
             entryNum = 0
             for currentEntry in entryList:
                 dayNumList[entryNum] = currentEntry['Day']
                 secNumList[entryNum] = currentEntry['Sec']
-                contextStrList[entryNum] = ""
                 valueList[entryNum] = currentEntry['Val']
 
                 entryNum += 1
             # End - for currentEntry in entryList:
 
             # Assemble the lists into a single timeline entry
-            timelineEntry = {'ID': str(currentTimelineID), 'd': dayNumList, 's': secNumList, 'c': contextStrList, 'v': valueList}
+            timelineEntry = {'ID': str(currentTimelineID), 'd': dayNumList, 's': secNumList, 'v': valueList, 'p': dict()}
             if (TVMATRIX_DEBUG):
                 self.CheckEntry(timelineEntry)
             self.timelineList.append(timelineEntry)
@@ -366,16 +394,16 @@ class TimeValueMatrix():
     # [TimeValueMatrix::MakeFromTDFAndSelectRanges]
     #
     # This creates a new TVMatrix for 1 specific value in a TDF file.
-    #   TV_MATRIX_TDF_SELECT_ALL                        = "All"
-    #   TV_MATRIX_TDF_SELECT_BELOW_MAX_THEN_REBOUND     = "BelowMaxThenRebound"
-    #   TV_MATRIX_TDF_SELECT_BELOW_MAX_AND_STAYOVER_MIN = "BelowMaxStayOverMin"
-    #   TV_MATRIX_TDF_SELECT_BELOW_MAX_AND_BELOW_MIN    = "BelowMaxAndBelowMin"
     #####################################################
-    def MakeFromTDFAndSelectRanges(self, tvMatrixFilePathName, valueName, selectOp, maxValue, minValue):
+    def MakeFromTDFAndSelectRanges(self, tvMatrixFilePathName, valueName, selectOp, minValue, maxValue):
         fOnlyOneValuePerDay = False
         fUniqueValues = False
         currentTimelineID = -1
         totalNumSequencesSaved = 0
+        numSeqsEnterRange = 0
+        numSeqsLeaveBottomRange = 0
+        numSeqsLeaveUpperRange = 0
+        resultsDict = {'numSeqsEnterRange': 0, 'numSeqsLeaveBottomRange': 0, 'numSeqsLeaveUpperRange': 0}
 
         fCarryForwardPreviousDataValues = False
         srcTDF = tdf.TDF_CreateTDFFileReaderEx(tvMatrixFilePathName, valueName, "", [], 
@@ -383,7 +411,7 @@ class TimeValueMatrix():
                                                 fCarryForwardPreviousDataValues)
         if (srcTDF is None):
             print("MakeFromTDF Error opening src file: " + srcFilePathName)
-            return
+            return resultsDict
  
         # Save the parameters. This may also clobber a previous file state.
         self.timelineList = []
@@ -408,28 +436,19 @@ class TimeValueMatrix():
             # Make a list. We may not need to use all of these so we may trim them at the end
             dayNumList = [0] * numEntries
             secNumList = [0] * numEntries
-            contextStrList = [""] * numEntries
             valueList = [0.0] * numEntries
             numSavedEntries = 0
 
             # Look at each new value and add it to the current entry
-            fResetList = False
             fSaveList = False
-            fStartAboveMax = False
-            fDroppedBelowMin = False
             for currentEntry in entryList:
                 # First, decide whether to include this value in the results list.
-                fAddValueToList = False
                 if (selectOp == TV_MATRIX_TDF_SELECT_ALL):
                     fAddValueToList = True
-                if (currentEntry['Val'] >= maxValue):
-                    fStartAboveMax = True
-                if ((currentEntry['Val'] <= maxValue) and (currentEntry['Val'] >= minValue)):
+                elif ((currentEntry['Val'] <= maxValue) and (currentEntry['Val'] >= minValue)):
                     fAddValueToList = True
-                if (currentEntry['Val'] < minValue):
-                    fDroppedBelowMin = True
                 else:
-                    fDroppedBelowMin = False
+                    fAddValueToList = False
 
                 # Optionally add the value to the current list.
                 # Note: This does not Save the list, it merely adds a value to the runtime state
@@ -437,25 +456,18 @@ class TimeValueMatrix():
                 if (fAddValueToList):
                     dayNumList[numSavedEntries] = currentEntry['Day']
                     secNumList[numSavedEntries] = currentEntry['Sec']
-                    contextStrList[numSavedEntries] = ""
                     valueList[numSavedEntries] = currentEntry['Val']
                     numSavedEntries += 1
-                # End - if (fAddValueToList):                
+                # End - if (fAddValueToList):
 
-                # Now, save or discard some lists 
-                if ((selectOp == TV_MATRIX_TDF_SELECT_BELOW_MAX_THEN_REBOUND) and (currentEntry['Val'] >= maxValue)):
+                # Not all lists we build get saved.
+                # For example, we may want to only save lists that dip into a range and then recover above the range,
+                # or we may want to save all lists that enter a range and then continue dropping through the bottom of the range.
+                # Decide whether to save or discard some lists 
+                if ((selectOp == TV_MATRIX_TDF_SELECT_IN_RANGE_THEN_LEAVE_THROUGH_TOP) and (currentEntry['Val'] >= maxValue)):
                     fSaveList = True
-                    fResetList = True
-                if ((selectOp == TV_MATRIX_TDF_SELECT_BELOW_MAX_AND_STAYOVER_MIN) and (currentEntry['Val'] < minValue)):
-                    fSaveList = False
-                    fResetList = True
-                if ((selectOp == TV_MATRIX_TDF_SELECT_BELOW_MAX_AND_STAYOVER_MIN) and (currentEntry['Val'] >= maxValue)):
-                    fSaveList = False
-                    fResetList = True
-                if ((selectOp == TV_MATRIX_TDF_SELECT_BELOW_MAX_AND_BELOW_MIN) and (currentEntry['Val'] < minValue)):
+                elif ((selectOp == TV_MATRIX_TDF_SELECT_IN_RANGE_THEN_LEAVE_THROUGH_BOTTOM) and (currentEntry['Val'] < minValue)):
                     fSaveList = True
-                    fResetList = True
-
 
                 # Optionally save the list
                 if (fSaveList):
@@ -463,13 +475,12 @@ class TimeValueMatrix():
                         # Trim the sequence to the final size
                         dayNumList = dayNumList[:numSavedEntries]
                         secNumList = secNumList[:numSavedEntries]
-                        contextStrList = contextStrList[:numSavedEntries]
                         valueList = valueList[:numSavedEntries]
 
                         # Assemble the lists into a single timeline entry
                         nameStr = str(currentTimelineID) + "_" + str(totalNumSequencesSaved)
                         timelineEntry = {'ID': nameStr, 'd': dayNumList, 's': secNumList, 
-                                            'c': contextStrList, 'v': valueList}
+                                         'v': valueList, 'p': dict()}
                         if (TVMATRIX_DEBUG):
                             self.CheckEntry(timelineEntry)
                         self.timelineList.append(timelineEntry)
@@ -477,7 +488,6 @@ class TimeValueMatrix():
                         # Make new lists that are not shared and also are not truncated
                         dayNumList = [0] * numEntries
                         secNumList = [0] * numEntries
-                        contextStrList = [""] * numEntries
                         valueList = [0.0] * numEntries
 
                         totalNumSequencesSaved += 1
@@ -487,41 +497,60 @@ class TimeValueMatrix():
                    fSaveList = False
                 # End - if (fSaveList):
 
-                # Optionally reset the list
-                if (fResetList):
+                # Lists should be contiguous, so if we did not add this value to the current list then reset the list
+                if (not fAddValueToList):
+                    # If we are closing a sequence of values, record why.
+                    # Note, this is independant of whether we save the sequence, so it is updated even if we start a sequence
+                    # but decide to not save it.
+                    if (numSavedEntries > 0):
+                        numSeqsEnterRange += 1
+                        if (currentEntry['Val'] <= minValue):
+                            numSeqsLeaveBottomRange += 1
+                        elif (currentEntry['Val'] >= maxValue):
+                            numSeqsLeaveUpperRange += 1
+                    # End - if (numSavedEntries > 0):
+
                     numSavedEntries = 0
-                    fStartAboveMax = False
-                    fDroppedBelowMin = False
-                    fResetList = False
-                # End - if (fResetList):
+                # End - if (not fAddValueToList):
             # End - for currentEntry in entryList:
 
-            # Add the last entry we were working on when we stopped finding new values
-            if ((selectOp == TV_MATRIX_TDF_SELECT_BELOW_MAX_AND_BELOW_MIN) and (not fDroppedBelowMin)):
+            # If we were waiting to see a value leave the range, either at the top or bottom, and we
+            # ran out of sequences in the timeline, then we did not find the terminating condition so 
+            # do not save it.
+            if ((selectOp == TV_MATRIX_TDF_SELECT_IN_RANGE_THEN_LEAVE_THROUGH_BOTTOM) or (selectOp == TV_MATRIX_TDF_SELECT_IN_RANGE_THEN_LEAVE_THROUGH_TOP)):
                 numSavedEntries = 0
+
+            # Add the last entry we were working on when we stopped finding new values
             if (numSavedEntries > 0):
                 # Trim the sequence to the final size
                 dayNumList = dayNumList[:numSavedEntries]
                 secNumList = secNumList[:numSavedEntries]
-                contextStrList = contextStrList[:numSavedEntries]
                 valueList = valueList[:numSavedEntries]
 
                 # Assemble the lists into a single timeline entry
                 nameStr = str(currentTimelineID) + "_" + str(totalNumSequencesSaved)
                 timelineEntry = {'ID': str(nameStr), 'd': dayNumList, 's': secNumList, 
-                                    'c': contextStrList, 'v': valueList}
+                                 'v': valueList, 'p': dict()}
                 if (TVMATRIX_DEBUG):
                     self.CheckEntry(timelineEntry)
                 self.timelineList.append(timelineEntry)
+
+                numSeqsEnterRange += 1
 
                 totalNumSequencesSaved += 1
                 numSavedEntries = 0
             # End - if (numSavedEntries > 0):
 
+
             fFoundTimeline = srcTDF.GotoNextTimeline()
         # End - while (fFoundTimeline):
 
         srcTDF.Shutdown()
+
+        resultsDict['numSeqsEnterRange'] = numSeqsEnterRange
+        resultsDict['numSeqsLeaveBottomRange'] = numSeqsLeaveBottomRange
+        resultsDict['numSeqsLeaveUpperRange'] = numSeqsLeaveUpperRange
+        return resultsDict
     # End - MakeFromTDFAndSelectRanges
 
 
@@ -623,15 +652,35 @@ class TimeValueMatrix():
             if ((currentLine.lower() == TVMATRIX_FILE_LOWERCASE_DATA_CLOSE_ELEMENT)):
                 break
 
-
             # Split it up into ID and data
-            partsList = currentLine.split(TIMEVALUE_ID_DATA_SEPARATOR)
+            partsList = currentLine.split(TIMEVALUE_TIMELINE_PROPS_CLOSE)
+            if (len(partsList) < 2):
+                continue
+            IDAndPropsStr = partsList[0].lstrip().rstrip()
+            dataList = partsList[1].lstrip().rstrip()
+
+            # Split up the name and the property list
+            partsList = IDAndPropsStr.split(TIMEVALUE_TIMELINE_PROPS_OPEN)
             if (len(partsList) < 2):
                 continue
             IDStr = partsList[0].lstrip().rstrip()
-            dataList = partsList[1].lstrip().rstrip()
+            propsStr = partsList[1].lstrip().rstrip()
 
-            # Split it up into entries
+            # Parse the properties for this timeline
+            linePropsDict = {}
+            partsList = propsStr.split(TIMEVALUE_LIST_SEPARATOR)
+            for nameValStr in partsList:
+                assignmentPartsList = nameValStr.split(TIMEVALUE_NAMEVALUE_SEPARATOR)
+                if (len(assignmentPartsList) < 2):
+                    continue
+
+                propNameStr = assignmentPartsList[0].lstrip().rstrip()
+                propValueStr = assignmentPartsList[1].lstrip().rstrip()
+                linePropsDict[propNameStr] = propValueStr
+            # End - for nameValStr in partsList:
+
+
+            # Split the line values up into entries
             entryList = dataList.split(TIMEVALUE_LIST_SEPARATOR)
             numEntries = len(entryList)
             if (numEntries <= 0):
@@ -639,23 +688,23 @@ class TimeValueMatrix():
 
             dayNumList = [0] * numEntries
             secNumList = [0] * numEntries
-            contextStrList = [""] * numEntries
             valueList = [0.0] * numEntries
             entryNum = 0
             for entryStr in entryList:
                 entryPartStrList = entryStr.split(TIMEVALUE_PART_SEPARATOR)
+                if (len(entryPartStrList) < 2):
+                    continue
 
                 dayNum, secInDay = tdf.TDF_ParseTimeStampIntoDaysSecs(entryPartStrList[0])
                 dayNumList[entryNum] = dayNum
                 secNumList[entryNum] = secInDay
-                contextStrList[entryNum] = entryPartStrList[1]
-                valueList[entryNum] = float(entryPartStrList[2])
+                valueList[entryNum] = float(entryPartStrList[1])
 
                 entryNum += 1
             # End - for entryStr in entryList
 
             # Assemble the lists into a single timeline entry
-            timelineEntry = {'ID': IDStr, 'd': dayNumList, 's': secNumList, 'c': contextStrList, 'v': valueList}
+            timelineEntry = {'ID': IDStr, 'd': dayNumList, 's': secNumList, 'v': valueList, 'p': linePropsDict}
             self.timelineList.append(timelineEntry)
 
             if (TVMATRIX_DEBUG):
@@ -758,22 +807,30 @@ class TimeValueMatrix():
         for timelineEntry in self.timelineList:
             dayNumList = timelineEntry['d'] 
             secNumList = timelineEntry['s'] 
-            contextStrList = timelineEntry['c'] 
             valueList = timelineEntry['v'] 
+            linePropsDict = timelineEntry['p']
             numItems = len(dayNumList)
-            if ((numItems != len(secNumList)) or (numItems != len(contextStrList)) 
+            if ((numItems != len(secNumList)) or (numItems != len(valueList)) 
                     or (numItems != len(valueList))):
                 raise Exception()
 
-            timelineStr = str(timelineEntry['ID']) + TIMEVALUE_ID_DATA_SEPARATOR
+            # Start the line with "idStr[n1=v1;n2=v2]"
+            timelineStr = str(timelineEntry['ID']) + TIMEVALUE_TIMELINE_PROPS_OPEN
+            for _, (valName, valStr) in enumerate(linePropsDict.items()):
+                timelineStr = timelineStr + valName + TIMEVALUE_NAMEVALUE_SEPARATOR + valStr + TIMEVALUE_LIST_SEPARATOR
+            # End - for index, (valName, value) in enumerate(statsDict.items()):
+            if (len(linePropsDict) > 0):
+                timelineStr = timelineStr[:-1]
+            timelineStr = timelineStr + TIMEVALUE_TIMELINE_PROPS_CLOSE
+
+            # Now print the values
             for index in range(numItems):
                 currentTimeCode = tdf.TDF_MakeTimeStampSimple(dayNumList[index], secNumList[index])
                 timelineStr = timelineStr + str(currentTimeCode) + TIMEVALUE_PART_SEPARATOR
-                timelineStr = timelineStr + contextStrList[index] + TIMEVALUE_PART_SEPARATOR
                 timelineStr = timelineStr + str(valueList[index]) + TIMEVALUE_LIST_SEPARATOR
             # End - for index in range(valueList)
 
-            if (timelineStr != ""):
+            if (numItems > 0):
                 timelineStr = timelineStr[:-1]
                 destFileH.write(timelineStr + NEWLINE_STR)
         # End - for timeline in self.timelineList
@@ -1000,11 +1057,11 @@ class TimeValueMatrix():
 
         for srcRow in srcTVMatrix.timelineList:
             numEntriesInSrcRow = len(srcRow['v'])
+            srcListID = srcRow['ID'] 
+            linePropsDict = srcRow['p'] 
             srcDayNumList = srcRow['d'] 
             srcSecNumList = srcRow['s'] 
-            srcContextStrList = srcRow['c'] 
             srcValueList = srcRow['v'] 
-            srcListID = srcRow['ID'] 
 
             # Skip rows with only 1 element or empty rows. These cannot have diffs.
             if (opName in [TV_MATRIX_DERIVED_TABLE_OP_DELTA, TV_MATRIX_DERIVED_TABLE_OP_VELOCITY,
@@ -1021,7 +1078,6 @@ class TimeValueMatrix():
 
             destDayNumList = [0] * numEntriesInDestRow
             destSecNumList = [0] * numEntriesInDestRow 
-            destContextStrList = [""]  * numEntriesInDestRow
             destValueList = [0.0] * numEntriesInDestRow
 
             ################################
@@ -1029,7 +1085,6 @@ class TimeValueMatrix():
                 for destEntryNum in range(numEntriesInDestRow):
                     destDayNumList[destEntryNum] = srcDayNumList[destEntryNum + 1]
                     destSecNumList[destEntryNum] = srcSecNumList[destEntryNum + 1]
-                    destContextStrList[destEntryNum] = srcContextStrList[destEntryNum + 1]
                     if (opName in [TV_MATRIX_DERIVED_TABLE_OP_DELTA]):
                         destValueList[destEntryNum] = srcValueList[destEntryNum + 1] - srcValueList[destEntryNum]
                     elif (opName in [TV_MATRIX_DERIVED_TABLE_OP_DELTA_DAYS]):
@@ -1046,7 +1101,6 @@ class TimeValueMatrix():
             elif (opName in [TV_MATRIX_DERIVED_TABLE_OP_TOTAL_DELTA, TV_MATRIX_DERIVED_TABLE_OP_TOTAL_VELOCITY]):            
                 destDayNumList[0] = srcDayNumList[numEntriesInSrcRow - 1]
                 destSecNumList[0] = srcSecNumList[numEntriesInSrcRow - 1]
-                destContextStrList[0] = srcContextStrList[numEntriesInSrcRow - 1]
                 if (opName in [TV_MATRIX_DERIVED_TABLE_OP_TOTAL_DELTA]):
                     destValueList[0] = srcValueList[numEntriesInSrcRow - 1] - srcValueList[0]
                 elif (opName in [TV_MATRIX_DERIVED_TABLE_OP_TOTAL_VELOCITY]):
@@ -1058,7 +1112,7 @@ class TimeValueMatrix():
                         destValueList[0] = 0
 
             # Assemble the lists into a single timeline entry
-            timelineEntry = {'ID': srcListID, 'd': destDayNumList, 's': destSecNumList, 'c': destContextStrList, 'v': destValueList}
+            timelineEntry = {'ID': srcListID, 'd': destDayNumList, 's': destSecNumList, 'v': destValueList, 'p': copy.deepcopy(linePropsDict)}
             self.timelineList.append(timelineEntry)
         # End - for srcRow in srcTVMatrix.timelineList:
     # End - MakeDerivedValueList
@@ -1079,7 +1133,6 @@ class TimeValueMatrix():
 
         self.derivedFromFileUUID = self.fileUUID
         self.fileUUID = str(UUID.uuid4())
-
 
         if (len(self.timelineList) <= 0):
             return
@@ -1125,14 +1178,13 @@ class TimeValueMatrix():
 
             # Otherwise, we will filter individual elements. This may keep the full row, or just parts of
             # it, or else remove the row entirely.
+            srcListID = srcRow['ID'] 
+            linePropsDict = srcRow['p'] 
             srcDayNumList = srcRow['d'] 
             srcSecNumList = srcRow['s'] 
-            srcContextStrList = srcRow['c'] 
             srcValueList = srcRow['v'] 
-            srcListID = srcRow['ID'] 
             destDayNumList = []
             destSecNumList = []
-            destContextStrList = []
             destValueList = []
             for srcEntryNum in range(numEntriesInSrcRow):
                 currentVal = srcValueList[srcEntryNum]
@@ -1146,11 +1198,9 @@ class TimeValueMatrix():
                 elif ((compareOp == TV_MATRIX_COMPARISON_GREATER_THAN_EQUAL) and (currentVal >= threshold)):
                     fUseCurrentValue = True
 
-
                 if (fUseCurrentValue):
                     destDayNumList.append(srcDayNumList[srcEntryNum])
                     destSecNumList.append(srcSecNumList[srcEntryNum])
-                    destContextStrList.append(srcContextStrList[srcEntryNum])
                     destValueList.append(srcValueList[srcEntryNum])
                 # End - if (fUseCurrentValue)
             # End - for srcEntryNum in range(numEntriesInSrcRow):
@@ -1159,13 +1209,12 @@ class TimeValueMatrix():
                 continue
             
             # Assemble the lists into a single timeline entry
-            timelineEntry = {'ID': srcListID, 'd': destDayNumList, 's': destSecNumList, 'c': destContextStrList, 'v': destValueList}
+            timelineEntry = {'ID': srcListID, 'd': destDayNumList, 's': destSecNumList, 'v': destValueList, 'p': copy.deepcopy(linePropsDict)}
             newTimelineList.append(timelineEntry)
         # End - for srcRow in self.timelineList:
 
         self.timelineList = newTimelineList
     # End - SelectValues
-
 
 
 
@@ -1187,9 +1236,9 @@ class TimeValueMatrix():
             if (numEntriesInSrcRow >= threshold):
                 destDayNumList = copy.deepcopy(srcDayNumList)
                 destSecNumList = copy.deepcopy(srcRow['s'])
-                destContextStrList = copy.deepcopy(srcRow['c'])
                 destValueList = copy.deepcopy(srcRow['v'])
-                timelineEntry = {'ID': srcListID, 'd': destDayNumList, 's': destSecNumList, 'c': destContextStrList, 'v': destValueList}
+                destLinePropsDict = copy.deepcopy(srcRow['p'])
+                timelineEntry = {'ID': srcListID, 'd': destDayNumList, 's': destSecNumList, 'v': destValueList, 'p': destLinePropsDict}
 
                 return timelineEntry
             # End - if (numEntriesInSrcRow >= threshold):
@@ -1199,9 +1248,9 @@ class TimeValueMatrix():
             if (totalDuration >= threshold):
                 destDayNumList = copy.deepcopy(srcDayNumList)
                 destSecNumList = copy.deepcopy(srcRow['s'])
-                destContextStrList = copy.deepcopy(srcRow['c'])
                 destValueList = copy.deepcopy(srcRow['v'])
-                timelineEntry = {'ID': srcListID, 'd': destDayNumList, 's': destSecNumList, 'c': destContextStrList, 'v': destValueList}
+                destLinePropsDict = copy.deepcopy(srcRow['p'])
+                timelineEntry = {'ID': srcListID, 'd': destDayNumList, 's': destSecNumList, 'v': destValueList, 'p': destLinePropsDict}
 
                 return timelineEntry
             # End - if (totalDuration >= threshold):
@@ -1224,9 +1273,9 @@ class TimeValueMatrix():
         lastValidEntryIndex = -1
 
         srcListID = srcRow['ID'] 
+        destLinePropsDict = copy.deepcopy(srcRow['p'])
         destDayNumList = copy.deepcopy(srcRow['d'])
         destSecNumList = copy.deepcopy(srcRow['s'])
-        destContextStrList = copy.deepcopy(srcRow['c'])
         destValueList = copy.deepcopy(srcRow['v'])
         numEntriesInSrcRow = len(destValueList)
         
@@ -1246,11 +1295,10 @@ class TimeValueMatrix():
         # Trim the timelines to end at a useful range
         destDayNumList = destDayNumList[:lastValidEntryIndex + 1]
         destSecNumList = destSecNumList[:lastValidEntryIndex+ 1]
-        destContextStrList = destContextStrList[:lastValidEntryIndex + 1]
         destValueList = destValueList[:lastValidEntryIndex + 1]
 
         # Assemble the lists into a single timeline entry
-        timelineEntry = {'ID': srcListID, 'd': destDayNumList, 's': destSecNumList, 'c': destContextStrList, 'v': destValueList}
+        timelineEntry = {'ID': srcListID, 'd': destDayNumList, 's': destSecNumList, 'v': destValueList, 'p': destLinePropsDict}
         return timelineEntry
     # End - TrimValuesFromEnd
 
@@ -1267,9 +1315,9 @@ class TimeValueMatrix():
         firstValidEntryIndex = -1
 
         srcListID = srcRow['ID'] 
+        destLinePropsDict = copy.deepcopy(srcRow['p'])
         destDayNumList = copy.deepcopy(srcRow['d'])
         destSecNumList = copy.deepcopy(srcRow['s'])
-        destContextStrList = copy.deepcopy(srcRow['c'])
         destValueList = copy.deepcopy(srcRow['v'])
         numEntriesInSrcRow = len(destValueList)
         
@@ -1291,14 +1339,12 @@ class TimeValueMatrix():
         # Trim the timelines to start at a useful range
         destDayNumList = destDayNumList[firstValidEntryIndex:]
         destSecNumList = destSecNumList[firstValidEntryIndex:]
-        destContextStrList = destContextStrList[firstValidEntryIndex:]
         destValueList = destValueList[firstValidEntryIndex:]
 
         # Assemble the lists into a single timeline entry
-        timelineEntry = {'ID': srcListID, 'd': destDayNumList, 's': destSecNumList, 'c': destContextStrList, 'v': destValueList}
+        timelineEntry = {'ID': srcListID, 'd': destDayNumList, 's': destSecNumList, 'v': destValueList, 'p': destLinePropsDict}
         return timelineEntry
     # End - TrimValuesFromFront
-
 
 
 
@@ -1312,9 +1358,9 @@ class TimeValueMatrix():
         resultRow = None
 
         srcListID = srcRow['ID'] 
+        destLinePropsDict = copy.deepcopy(srcRow['p'])
         destDayNumList = copy.deepcopy(srcRow['d'])
         destSecNumList = copy.deepcopy(srcRow['s'])
-        destContextStrList = copy.deepcopy(srcRow['c'])
         destValueList = copy.deepcopy(srcRow['v'])
         numEntriesInSrcRow = len(destValueList)
 
@@ -1371,11 +1417,10 @@ class TimeValueMatrix():
         # Trim the timelines to start at a useful range
         destDayNumList = destDayNumList[firstValidEntryIndex:]
         destSecNumList = destSecNumList[firstValidEntryIndex:]
-        destContextStrList = destContextStrList[firstValidEntryIndex:]
         destValueList = destValueList[firstValidEntryIndex:]
 
         # Assemble the lists into a single timeline entry
-        timelineEntry = {'ID': srcListID, 'd': destDayNumList, 's': destSecNumList, 'c': destContextStrList, 'v': destValueList}
+        timelineEntry = {'ID': srcListID, 'd': destDayNumList, 's': destSecNumList, 'v': destValueList, 'p': destLinePropsDict}
         return timelineEntry
     # End - TrimValuesFromFrontOfStretch
 
@@ -1424,7 +1469,7 @@ class TimeValueMatrix():
     #
     #####################################################
     def MakeHistogramOfValuesInvsOutTimePeriod(self, startDayInSecs, stopDayInSecs):
-        ###############################################
+        ###################
         # Preflight the data
         preFlight = MedHistogram.Preflight()
         for srcRow in self.timelineList:
@@ -1625,6 +1670,8 @@ class TimeValueMatrix():
 
 
 
+
+
     #####################################################
     #
     # MakeHistogramOfTimelineLengthsEx
@@ -1656,6 +1703,7 @@ class TimeValueMatrix():
     def MakeTimesRelativeToZero(self, timelineEntry):
         offset = 0
 
+        linePropsDict = timelineEntry['p']
         dayNumList = timelineEntry['d'] 
         numItems = len(dayNumList)
 
@@ -1667,8 +1715,11 @@ class TimeValueMatrix():
             dayNumList[index] = dayNumList[index] - offset
         # End - for index in range(valueList)
 
-        if ('ld' in timelineEntry):
-            timelineEntry['ld'] = timelineEntry['ld'] - offset
+        linePropsDict[TV_MATRIX_TIMELINE_BASE_DAY_PROPERTY] = offset
+        if (TV_MATRIX_TIMELINE_LAST_HEALTHY_DAY_PROPERTY in linePropsDict):
+            linePropsDict[TV_MATRIX_TIMELINE_LAST_HEALTHY_DAY_PROPERTY] = linePropsDict[TV_MATRIX_TIMELINE_LAST_HEALTHY_DAY_PROPERTY] - offset
+
+        timelineEntry['p'] = linePropsDict
      # End - MakeTimesRelativeToZero
 
 
@@ -1692,8 +1743,8 @@ class TimeValueMatrix():
 
         dayNumList = timelineEntry['d'] 
         secNumList = timelineEntry['s'] 
-        contextStrList = timelineEntry['c'] 
         valueList = timelineEntry['v'] 
+        linePropsDict = timelineEntry['p']
         numItems = len(valueList)
 
         # Look for the first sick entry
@@ -1715,27 +1766,26 @@ class TimeValueMatrix():
         if (fFoundSickValue):
             # Record the last healthy value before it started to get sick.
             if (firstSickIndex > 0):
-                timelineEntry['l'] = True
-                timelineEntry['ld'] = dayNumList[firstSickIndex - 1]
+                linePropsDict[TV_MATRIX_TIMELINE_HAD_HEALTHY_DAY_PROPERTY] = True
+                linePropsDict[TV_MATRIX_TIMELINE_LAST_HEALTHY_DAY_PROPERTY] = dayNumList[firstSickIndex - 1]
                 # Trim the list to start at the sick values
                 timelineEntry['d'] = dayNumList[firstSickIndex:]
                 timelineEntry['s'] = secNumList[firstSickIndex:]
-                timelineEntry['c'] = contextStrList[firstSickIndex:]
                 timelineEntry['v'] = valueList[firstSickIndex:]
             else:
-                timelineEntry['l'] = False
-                timelineEntry['ld'] = 0
+                linePropsDict[TV_MATRIX_TIMELINE_HAD_HEALTHY_DAY_PROPERTY] = False
+                linePropsDict[TV_MATRIX_TIMELINE_LAST_HEALTHY_DAY_PROPERTY] = 0
         else:
-            timelineEntry['l'] = False
-            timelineEntry['ld'] = 0
+            linePropsDict[TV_MATRIX_TIMELINE_HAD_HEALTHY_DAY_PROPERTY] = False
+            linePropsDict[TV_MATRIX_TIMELINE_LAST_HEALTHY_DAY_PROPERTY] = 0
             
             timelineEntry['d'] = []
             timelineEntry['s'] = []
-            timelineEntry['c'] = []
             timelineEntry['v'] = []
 
         # Ignore the real value, all healthy values look alike
-        timelineEntry['lv'] = threshold
+        linePropsDict[TV_MATRIX_TIMELINE_HEALTHY_THRESHOLD_PROPERTY] = threshold
+        timelineEntry['p'] = linePropsDict
     # End - DiscardHealthyItemsFromBeginning
 
 
@@ -1749,9 +1799,9 @@ class TimeValueMatrix():
     #
     #####################################################
     def CombineMultipleEntriesFromSameDay(self, timelineEntry, fHigherIsHealthier):
+        linePropsDict = timelineEntry['p']
         dayNumList = timelineEntry['d'] 
         secNumList = timelineEntry['s'] 
-        contextStrList = timelineEntry['c'] 
         valueList = timelineEntry['v'] 
 
         numItems = len(valueList)
@@ -1771,7 +1821,6 @@ class TimeValueMatrix():
                 dayNumList[destIndex] = dayNumList[srcIndex]
                 valueList[destIndex] = valueList[srcIndex]
                 secNumList[destIndex] = secNumList[srcIndex]
-                contextStrList[destIndex] = contextStrList[srcIndex]
                 lastValidEntry += 1
                 srcIndex += 1
         # End - while (srcIndex < numItems)
@@ -1781,7 +1830,6 @@ class TimeValueMatrix():
         if ((lastValidEntry + 1) < numItems):
             timelineEntry['d'] = dayNumList[:lastValidEntry + 1]
             timelineEntry['s'] = secNumList[:lastValidEntry + 1]
-            timelineEntry['c'] = contextStrList[:lastValidEntry + 1]
             timelineEntry['v'] = valueList[:lastValidEntry + 1]
     # End - CombineMultipleEntriesFromSameDay
 
@@ -1869,12 +1917,10 @@ class TimeValueMatrix():
             if (fRemoveFromList1):
                 timelineEntry1['d'] = []
                 timelineEntry1['s'] = []
-                timelineEntry1['c'] = []
                 timelineEntry1['v'] = []
             else:
                 timelineEntry2['d'] = []
                 timelineEntry2['s'] = []
-                timelineEntry2['c'] = []
                 timelineEntry2['v'] = []
             return
         # End - if (not foundStartIndex):
@@ -1883,40 +1929,36 @@ class TimeValueMatrix():
         if (fRemoveFromList1):
             dayNumList = timelineEntry1['d'] 
             secNumList = timelineEntry1['s'] 
-            contextStrList = timelineEntry1['c'] 
             valueList = timelineEntry1['v'] 
 
             if (indexThatIsSickEnough > 0):
-                timelineEntry1['l'] = True
-                timelineEntry1['ld'] = dayNumList[indexThatIsSickEnough - 1]
-                timelineEntry1['lv'] = valueList[indexThatIsSickEnough - 1]
+                timelineEntry1['p'][TV_MATRIX_TIMELINE_HAD_HEALTHY_DAY_PROPERTY] = True
+                timelineEntry1['p'][TV_MATRIX_TIMELINE_LAST_HEALTHY_DAY_PROPERTY] = dayNumList[indexThatIsSickEnough - 1]
+                timelineEntry1['p'][TV_MATRIX_TIMELINE_LAST_HEALTHY_VALUE_PROPERTY] = valueList[indexThatIsSickEnough - 1]
             else:
-                timelineEntry1['l'] = False
-                timelineEntry1['ld'] = 0
-                timelineEntry1['lv'] = 0
+                timelineEntry1['p'][TV_MATRIX_TIMELINE_HAD_HEALTHY_DAY_PROPERTY] = False
+                timelineEntry1['p'][TV_MATRIX_TIMELINE_LAST_HEALTHY_DAY_PROPERTY] = 0
+                timelineEntry1['p'][TV_MATRIX_TIMELINE_LAST_HEALTHY_VALUE_PROPERTY] = 0
 
             timelineEntry1['d'] = dayNumList[indexThatIsSickEnough:]
             timelineEntry1['s'] = secNumList[indexThatIsSickEnough:]
-            timelineEntry1['c'] = contextStrList[indexThatIsSickEnough:]
             timelineEntry1['v'] = valueList[indexThatIsSickEnough:]
         else:
             dayNumList = timelineEntry2['d'] 
             secNumList = timelineEntry2['s'] 
-            contextStrList = timelineEntry2['c'] 
             valueList = timelineEntry2['v'] 
 
             if (indexThatIsSickEnough > 0):
-                timelineEntry2['l'] = True
-                timelineEntry2['ld'] = dayNumList[indexThatIsSickEnough - 1]
-                timelineEntry2['lv'] = valueList[indexThatIsSickEnough - 1]
+                timelineEntry2['p'][TV_MATRIX_TIMELINE_HAD_HEALTHY_DAY_PROPERTY] = True
+                timelineEntry2['p'][TV_MATRIX_TIMELINE_LAST_HEALTHY_DAY_PROPERTY] = dayNumList[indexThatIsSickEnough - 1]
+                timelineEntry2['p'][TV_MATRIX_TIMELINE_LAST_HEALTHY_VALUE_PROPERTY] = valueList[indexThatIsSickEnough - 1]
             else:
-                timelineEntry2['l'] = False
-                timelineEntry2['ld'] = 0
-                timelineEntry2['lv'] = 0
+                timelineEntry2['p'][TV_MATRIX_TIMELINE_HAD_HEALTHY_DAY_PROPERTY] = False
+                timelineEntry2['p'][TV_MATRIX_TIMELINE_LAST_HEALTHY_DAY_PROPERTY] = 0
+                timelineEntry2['p'][TV_MATRIX_TIMELINE_LAST_HEALTHY_VALUE_PROPERTY] = 0
 
             timelineEntry2['d'] = dayNumList[indexThatIsSickEnough:]
             timelineEntry2['s'] = secNumList[indexThatIsSickEnough:]
-            timelineEntry2['c'] = contextStrList[indexThatIsSickEnough:]
             timelineEntry2['v'] = valueList[indexThatIsSickEnough:]
         # End - else
     # End - StartBothListsAtSameDiseaseLevel
@@ -1957,7 +1999,7 @@ class TimeValueMatrix():
         # of disease.
         if (fNarrowTimelinesToSickValues):
             self.StartBothListsAtSameDiseaseLevel(timelineEntry1, timelineEntry2, 
-                                        fHigherIsHealthier, lastHealthyValue, valueErrorRange)
+                                                    fHigherIsHealthier, lastHealthyValue, valueErrorRange)
             if ((len(timelineEntry1['v']) < MIN_NUMBER_VALUES_FOR_COVARIANT)
                     or (len(timelineEntry2['v']) < MIN_NUMBER_VALUES_FOR_COVARIANT)):
                 return
@@ -1977,13 +2019,11 @@ class TimeValueMatrix():
         dayNumList1 = timelineEntry1['d'] 
         numItems1 = len(dayNumList1)
         secNumList1 = timelineEntry1['s'] 
-        contextStrList1 = timelineEntry1['c'] 
         valueList1 = timelineEntry1['v'] 
 
         dayNumList2 = timelineEntry2['d'] 
         numItems2 = len(dayNumList2)
         secNumList2 = timelineEntry2['s'] 
-        contextStrList2 = timelineEntry2['c'] 
         valueList2 = timelineEntry2['v'] 
 
         # The two lists may sample at different times.
@@ -1999,7 +2039,7 @@ class TimeValueMatrix():
                 continue
 
             # Insert a new value BEFORE the current date in list 2 if there is a value to interpolate with
-            if ((dayNumList1[index1] < dayNumList2[index2]) and ((index2 > 0) or ('ld' in timelineEntry2))):
+            if ((dayNumList1[index1] < dayNumList2[index2]) and ((index2 > 0) or (TV_MATRIX_TIMELINE_LAST_HEALTHY_DAY_PROPERTY in timelineEntry2['p']))):
                 fInsertIntoList1 = False
                 insertIndex = index2
                 # List 2 will now have an entry with the same date as the current entry in list1
@@ -2010,15 +2050,15 @@ class TimeValueMatrix():
                 currentValue = valueList2[index2]
                 currentDay = dayNumList2[index2]
                 currentSecs = secNumList2[index2]
-                currentContext = contextStrList2[index2]
+
                 if (index2 > 0):
                     prevValue = valueList2[index2 - 1]
                     prevDay = dayNumList2[index2 - 1]
                 else:
-                    prevValue = timelineEntry2['lv']
-                    prevDay = timelineEntry2['ld']
+                    prevValue = timelineEntry2['p'][TV_MATRIX_TIMELINE_LAST_HEALTHY_VALUE_PROPERTY]
+                    prevDay = timelineEntry2['p'][TV_MATRIX_TIMELINE_LAST_HEALTHY_DAY_PROPERTY]
             # Insert a new value BEFORE the current date in list 1 if there is a value to interpolate with
-            elif ((dayNumList2[index2] < dayNumList1[index1]) and ((index1 > 0)or ('ld' in timelineEntry1))):
+            elif ((dayNumList2[index2] < dayNumList1[index1]) and ((index1 > 0)or (TV_MATRIX_TIMELINE_LAST_HEALTHY_DAY_PROPERTY in timelineEntry1['p']))):
                 fInsertIntoList1 = True
                 insertIndex = index1
                 # List 1 will now have an entry with the same date as the current entry in list2
@@ -2029,13 +2069,12 @@ class TimeValueMatrix():
                 currentValue = valueList1[index1]
                 currentDay = dayNumList1[index1]
                 currentSecs = secNumList1[index1]
-                currentContext = contextStrList1[index1]
                 if (index1 > 0):
                     prevValue = valueList1[index1 - 1]
                     prevDay = dayNumList1[index1 - 1]
                 else:
-                    prevValue = timelineEntry1['lv']
-                    prevDay = timelineEntry1['ld']
+                    prevValue = timelineEntry1['p'][TV_MATRIX_TIMELINE_LAST_HEALTHY_VALUE_PROPERTY]
+                    prevDay = timelineEntry1['p'][TV_MATRIX_TIMELINE_LAST_HEALTHY_DAY_PROPERTY]
             # End - elif (dayNumList2[index2] < dayNumList1[index1]):
             #####################################################
             # Otherwise, leave the values unaligned
@@ -2060,12 +2099,10 @@ class TimeValueMatrix():
             if (fInsertIntoList1):
                 dayNumList1.insert(insertIndex, newDate)
                 secNumList1.insert(insertIndex, currentSecs)
-                contextStrList1.insert(insertIndex, currentContext)
                 valueList1.insert(insertIndex, newInterpolatedValue)
             else:
                 dayNumList2.insert(insertIndex, newDate)
                 secNumList2.insert(insertIndex, currentSecs)
-                contextStrList2.insert(insertIndex, currentContext)
                 valueList2.insert(insertIndex, newInterpolatedValue)
 
             # After inserting into list A, look at the next element in list B.
@@ -2075,28 +2112,23 @@ class TimeValueMatrix():
             index1 += 1
         # End - while ((index1 < numItems1) and (index2 < numItems2)):
 
-
         newLength = min(index1, index2)
         # Now, discard any values that extended beyond the other list
         if (numItems1 > newLength):
             dayNumList1 = dayNumList1[:newLength]
             secNumList1 = secNumList1[:newLength]
-            contextStrList1 = contextStrList1[:newLength]
             valueList1 = valueList1[:newLength]
         if (numItems2 > newLength):
             dayNumList2 = dayNumList2[:newLength]
             secNumList2 = secNumList2[:newLength]
-            contextStrList2 = contextStrList2[:newLength]
             valueList2 = valueList2[:newLength]
 
         timelineEntry1['d'] = dayNumList1
         timelineEntry1['s'] = secNumList1
-        timelineEntry1['c'] = contextStrList1
         timelineEntry1['v'] = valueList1
 
         timelineEntry2['d'] = dayNumList2
         timelineEntry2['s'] = secNumList2
-        timelineEntry2['c'] = contextStrList2
         timelineEntry2['v'] = valueList2
     # End - InterpolateDataPoints
 
@@ -2120,8 +2152,8 @@ class TimeValueMatrix():
         timelineEntry1 = copy.deepcopy(self.timelineList[rowNum1])
         timelineEntry2 = copy.deepcopy(self.timelineList[rowNum2])
         self.InterpolateDataPoints(timelineEntry1, timelineEntry2, 
-                    fNarrowTimelinesToSickValues,
-                    fHigherIsHealthier, lastHealthyValue, valueErrorRange)
+                                    fNarrowTimelinesToSickValues,
+                                    fHigherIsHealthier, lastHealthyValue, valueErrorRange)
 
         if ((len(timelineEntry1['v']) < MIN_NUMBER_VALUES_FOR_COVARIANT)
                 or (len(timelineEntry2['v']) < MIN_NUMBER_VALUES_FOR_COVARIANT)):
@@ -2255,6 +2287,134 @@ class TimeValueMatrix():
 
 
 
+
+    ################################################################################
+    #
+    # [SplifTDFFileIntoTestTrain]
+    #
+    ################################################################################
+    def SplifTDFFileIntoTestTrain(self, srcTDFFilePath, destDirPath):
+        tdfFileName = os.path.basename(srcTDFFilePath)
+        fileStem = os.path.splitext(tdfFileName)[0]
+        fileSuffix = os.path.splitext(tdfFileName)[1]
+
+        trainFilePath = os.path.join(destDirPath, fileStem + "Train" + fileSuffix)
+        testFilePath = os.path.join(destDirPath, fileStem + "Test" + fileSuffix)
+
+        # Open the source file.
+        inputNameListStr = tdf.TDF_GetNamesForAllVariables()
+        resultValueName = ""
+        tdfFileReader = tdf.TDF_CreateTDFFileReader(srcTDFFilePath, inputNameListStr, resultValueName, [])
+
+        # Open the train and test files.
+        # If the files already exist, then w+ will cause them to be emptied.
+        trainFileH = open(trainFilePath, "w+")
+        testFileH = open(testFilePath, "w+")
+
+        headerStr = tdfFileReader.GetRawXMLStrForHeader()
+        headerStr = headerStr + "\n\n"
+
+        # Fix up the GUIDs in the test and train headers
+        headerStr = headerStr.replace("<DerivedFrom></DerivedFrom>", "***REPLACEME***")
+        headerStr = headerStr.replace("UUID>", "DerivedFrom>")
+        headerStrTrain = headerStr.replace("***REPLACEME***", "<UUID>" + str(UUID.uuid4()) + "</UUID>")
+        headerStrTest = headerStr.replace("***REPLACEME***", "<UUID>" + str(UUID.uuid4()) + "</UUID>")
+        trainFileH.write(headerStrTrain)
+        testFileH.write(headerStrTest)
+
+
+        floatFractionInTrain = 0.8
+        numPatients = 0
+        numPatientsInTrain = 0
+        numPatientsInTest = 0
+
+        # Iterate over every patient
+        xmlStr = tdfFileReader.GetRawXMLStrForFirstTimeline()
+        while ((xmlStr is not None) and (xmlStr != "")):
+            numPatients += 1
+
+            # Parse the text string into am XML DOM
+            currentTimelineID = -1
+            currentTimelineXMLDOM = dxml.XMLTools_ParseStringToDOM(xmlStr)
+            if (currentTimelineXMLDOM is None):
+                print("SplifTDFFileIntoTestTrain. Error from parsing string:")
+                xmlStr = tdfFileReader.GetRawXMLStrForNextTimeline()
+                continue
+            currentTimelineNode = dxml.XMLTools_GetNamedElementInDocument(currentTimelineXMLDOM, "TL")
+            if (currentTimelineNode is None):
+                TDF_Log("ParseCurrentTimelineImpl. timeline element is missing: [" + xmlStr + "]")
+                xmlStr = tdfFileReader.GetRawXMLStrForNextTimeline()
+                continue
+            idStr = currentTimelineNode.getAttribute("id")
+            if ((idStr) and (idStr != "")):
+                currentTimelineID = int(idStr)
+
+            # Look for the row with this ID.
+            # <><> FIXME BUGBUG This is slow, and the linear search really should be replaced 
+            # with a hash lookup using the ID as the key.
+            listOfEntries = []
+            for entry in self.timelineList:
+                idStrParts = entry['ID'].split("_")
+                rowTimelineIDStr = idStrParts[0]
+                if (rowTimelineIDStr == idStr):
+                    listOfEntries.append(entry)
+            # End - for entry in self.timelineList:
+
+            # Write an edited version of every list
+            for timelineEntry in listOfEntries:
+                # Find the start and stop days
+                linePropsDict = timelineEntry['p']
+                offset = 0
+                if TV_MATRIX_TIMELINE_BASE_DAY_PROPERTY in linePropsDict:
+                    offset = linePropsDict[TV_MATRIX_TIMELINE_BASE_DAY_PROPERTY]
+                
+                dayNumList = timelineEntry['d'] 
+                numItems = len(dayNumList)
+                firstDayNum = dayNumList[0] + offset
+                lastDayNum = dayNumList[numItems] + offset
+
+                # Copy the XML
+                copyDOMNode = copy.deepcopy(currentTimelineXMLDOM)
+                copyTimelineNode = dxml.XMLTools_GetNamedElementInDocument(copyDOMNode, "TL")
+                if (currentTimelineNode is None):
+                    TDF_Log("ParseCurrentTimelineImpl. timeline element is missing: [" + xmlStr + "]")
+                    xmlStr = tdfFileReader.GetRawXMLStrForNextTimeline()
+                    continue
+
+                # Remove any elements outside range
+                tdf.RemoveDataAroundTimeWindow(copyTimelineNode, firstDay, LastDay)
+
+                # Make an XML string
+                dxml.XMLTools_RemoveAllWhitespace(copyTimelineNode)
+                resultStr = copyDOMNode.toprettyxml(indent="    ", newl="\n", encoding=None)
+
+                # Write the new timeline to either the test or the training file.
+                randNum = random.random()
+                if (randNum <= floatFractionInTrain):
+                    numPatientsInTrain += 1
+                    trainFileH.write(xmlStr)
+                else:
+                    numPatientsInTest += 1
+                    testFileH.write(xmlStr)
+            # End - for timelineEntry in listOfEntries:
+
+            # Done with this patient, go to the next.
+            xmlStr = tdfFileReader.GetRawXMLStrForNextTimeline()
+        # End - while ((xmlStr != None) and (xmlStr != "")):
+
+        # Write the footers.
+        footerStr = tdfFileReader.GetRawXMLStrForFooter()
+        trainFileH.write(footerStr)
+        testFileH.write(footerStr)
+
+        # Save and close the file.
+        tdfFileReader.Shutdown()
+        trainFileH.close()
+        testFileH.close()
+
+        return trainFilePath, testFilePath
+    # End - SplifTDFFileIntoTestTrain
+
 # End - class TimeValueMatrix
 
 
@@ -2291,13 +2451,11 @@ def CreateTimeValueMatrixFromTDF(tvMatrixFilePathName, valueName):
 ################################################################################
 # 
 ################################################################################
-def MakeTimeValueMatrixFromSelectionsOfTDF(tvMatrixFilePathName, valueName, selectOp, maxValue, minValue):
+def MakeTimeValueMatrixFromSelectionsOfTDF(tvMatrixFilePathName, valueName, selectOp, minValue, maxValue):
     newTVMatrix = TimeValueMatrix()
-    newTVMatrix.MakeFromTDFAndSelectRanges(tvMatrixFilePathName, valueName, selectOp, maxValue, minValue)
-    return newTVMatrix
+    resultsDict = newTVMatrix.MakeFromTDFAndSelectRanges(tvMatrixFilePathName, valueName, selectOp, minValue, maxValue)
+    return newTVMatrix, resultsDict
 # End - MakeTimeValueMatrixFromSelectionsOfTDF
-
-
 
 
 
@@ -2333,8 +2491,3 @@ def TimeValueMatrix_FixMatrixFile(oldFilePath, newFilePath):
 # End - TimeValueMatrix_FixMatrixFile
 
 
-
-# <><> FIXME Delete this. Some testing/debugging junk.
-#TimeValueMatrix_FixMatrixFile("/home/ddean/ActiveData/researchResults/TrendsInCKD/CKDTVMatrixFilteredTimelineLengthOver10.txt",
-#                "/home/ddean/ActiveData/researchResults/TrendsInCKD/NewCKDTVMatrixFilteredTimelineLengthOver10.txt")
-#ReadTimeValueMatrixFromFile("/home/ddean/ActiveData/researchResults/TrendsInCKD/CKDTVMatrixFilteredTimelineLengthOver10.txt")

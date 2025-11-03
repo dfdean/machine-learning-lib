@@ -3918,7 +3918,6 @@ class TDFFileReader():
         return maxDays
     # End - GetMaxDaysWithZeroValue
 
-
 # End - class TDFFileReader
 
 
@@ -4114,6 +4113,43 @@ def TDF_GetNamesForAllVariables():
     listStr = listStr[:-1]
     return listStr
 # End - TDF_GetNamesForAllVariables
+
+
+
+
+
+
+################################################################################
+#
+# [TDFFileReader::RemoveDataAroundTimeWindow]
+#
+################################################################################
+def RemoveDataAroundTimeWindow(timelineNode, firstDay, LastDay):
+    parentNode = timelineNode
+    currentNode = dxml.XMLTools_GetFirstChildNode(timelineNode)
+    while (currentNode):
+        nodeType = dxml.XMLTools_GetElementName(currentNode).lower()
+
+        # We ignore any nodes other than Data and Events
+        if (nodeType not in ('e', 'd')):
+            # Go to the next XML node in the TDF
+            currentNode = dxml.XMLTools_GetAnyPeerNode(currentNode)
+            continue
+        # Get the timestamp for this XML node.
+        labDateDays = -1
+        timeStampStr = currentNode.getAttribute("T")
+        if ((timeStampStr is not None) and (timeStampStr != "")):
+            labDateDays, labDateHours, labDateMins, labDateSecs = TDF_ParseTimeStamp(timeStampStr)
+
+        nextPeer = dxml.XMLTools_GetAnyPeerNode(currentNode)
+        if ((labDateDays >= 0) and ((labDateDays < firstDay) or (labDateDays > LastDay))):
+            parentNode.removeChild(currentNode)
+
+        # Go to the next XML node in the TDF
+        currentNode = nextPeer
+    # End - while (currentNode):
+# End - RemoveDataAroundTimeWindow
+
 
 
 

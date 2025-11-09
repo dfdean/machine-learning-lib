@@ -280,7 +280,6 @@ g_LabValueInfo = {
     # Patient Status
     'HospitalDay': {'minVal': 0.0, 'maxVal': 100.0, 'dataType': TDF_DATA_TYPE_INT, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': "InHospital"},
     'InHospital': {'minVal': 0.0, 'maxVal': 1.0, 'dataType': TDF_DATA_TYPE_BOOL, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': ""},
-    'InICU': {'minVal': 0.0, 'maxVal': 1.0, 'dataType': TDF_DATA_TYPE_BOOL, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': "InHospital"},
     'LengthOfStay': {'minVal': 0.0, 'maxVal': 90.0, 'dataType': TDF_DATA_TYPE_INT, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': "InHospital;HospitalAdmitDate;HospitalAdmitDate"},
     'DaysSincePrev': {'minVal': 0.0, 'maxVal': 20.0, 'dataType': TDF_DATA_TYPE_INT, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': "InHospital;HospitalAdmitDate;HospitalAdmitDate"},
     'MajorSurgeries': {'minVal': 1.0, 'maxVal': 3.0, 'dataType': TDF_DATA_TYPE_INT, 'ActionAfterEachTimePeriod': "zero", 'Calculated': False, 'VariableDependencies': ""},
@@ -298,8 +297,9 @@ g_LabValueInfo = {
 
     ##############################
     # Future Disease Stages by Boolean
-    'Future_Boolean_RapidResponse': {'minVal': 0.0, 'maxVal': 1.0, 'dataType': TDF_DATA_TYPE_BOOL, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': "NextFutureRapidResponseDate;InHospital"},
-    'Future_Boolean_TransferIntoICU': {'minVal': 0.0, 'maxVal': 1.0, 'dataType': TDF_DATA_TYPE_BOOL, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': "InICU;NextFutureTransferToICUDate;InHospital"},
+    'OutcomeImprove': {'minVal': 0.0, 'maxVal': 1.0, 'dataType': TDF_DATA_TYPE_BOOL, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': ""},
+    'OutcomeWorsen': {'minVal': 0.0, 'maxVal': 1.0, 'dataType': TDF_DATA_TYPE_BOOL, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': ""},
+    'OutcomeFutureEndStage': {'minVal': 0.0, 'maxVal': 1.0, 'dataType': TDF_DATA_TYPE_BOOL, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': ""},
     'Future_Boolean_CKD5': {'minVal': 0.0, 'maxVal': 1.0, 'dataType': TDF_DATA_TYPE_BOOL, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': "GFR;StartCKD5Date"},
     'Future_Boolean_CKD4': {'minVal': 0.0, 'maxVal': 1.0, 'dataType': TDF_DATA_TYPE_BOOL, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': "GFR;StartCKD4Date"},
     'Future_Boolean_CKD3b': {'minVal': 0.0, 'maxVal': 1.0, 'dataType': TDF_DATA_TYPE_BOOL, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': "GFR;StartCKD3bDate"},
@@ -318,8 +318,6 @@ g_LabValueInfo = {
     ##############################
     # Future Disease Stages by Number of Days
     'Future_Days_Until_Discharge': {'minVal': 0.0, 'maxVal': 3650, 'dataType': TDF_DATA_TYPE_INT, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': "HospitalAdmitDate;NextFutureDischargeDate;InHospital"},
-    'Future_Days_Until_RapidResponse': {'minVal': 0.0, 'maxVal': 3650, 'dataType': TDF_DATA_TYPE_INT, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': "NextFutureRapidResponseDate;InHospital"},
-    'Future_Days_Until_TransferIntoICU': {'minVal': 0.0, 'maxVal': 3650, 'dataType': TDF_DATA_TYPE_INT, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': "InICU;NextFutureTransferToICUDate;InHospital"},
     'Future_Days_Until_CKD5': {'minVal': 0.0, 'maxVal': 3650, 'dataType': TDF_DATA_TYPE_INT, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': "GFR;StartCKD5Date"},
     'Future_Days_Until_CKD4': {'minVal': 0.0, 'maxVal': 3650, 'dataType': TDF_DATA_TYPE_INT, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': "GFR;StartCKD4Date"},
     'Future_Days_Until_CKD3b': {'minVal': 0.0, 'maxVal': 3650, 'dataType': TDF_DATA_TYPE_INT, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': "GFR;StartCKD3bDate"},
@@ -343,9 +341,6 @@ g_LabValueInfo = {
 
     'HospitalAdmitDate': {'minVal': 0.0, 'maxVal': 1.0, 'dataType': TDF_DATA_TYPE_INT, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': "InHospital"},
     'NextFutureDischargeDate': {'minVal': 0.0, 'maxVal': 1.0, 'dataType': TDF_DATA_TYPE_INT, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': "HospitalAdmitDate;NextFutureDischargeDate;InHospital"},
-    'NextFutureRapidResponseDate': {'minVal': 0.0, 'maxVal': 1.0, 'dataType': TDF_DATA_TYPE_INT, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': "InHospital"},
-    'NextFutureTransferToICUDate': {'minVal': 0.0, 'maxVal': 1.0, 'dataType': TDF_DATA_TYPE_INT, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': "InHospital;InICU"},
-    'NextFutureTransferToWardDate': {'minVal': 0.0, 'maxVal': 1.0, 'dataType': TDF_DATA_TYPE_INT, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': ";InICU"},
 
     'MostRecentDialysisDate': {'minVal': (18.0 * 365), 'maxVal': (90.0 * 365), 'dataType': TDF_DATA_TYPE_INT, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': ""},
     'MostRecentMajorSurgeryDate': {'minVal': (18.0 * 365), 'maxVal': (90.0 * 365), 'dataType': TDF_DATA_TYPE_INT, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': "InHospital"},

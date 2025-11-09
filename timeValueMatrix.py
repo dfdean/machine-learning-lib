@@ -2288,132 +2288,36 @@ class TimeValueMatrix():
 
 
 
+
     ################################################################################
     #
-    # [SplifTDFFileIntoTestTrain]
+    # [FindAllPeriodsForTimelineID]
     #
     ################################################################################
-    def SplifTDFFileIntoTestTrain(self, srcTDFFilePath, destDirPath):
-        tdfFileName = os.path.basename(srcTDFFilePath)
-        fileStem = os.path.splitext(tdfFileName)[0]
-        fileSuffix = os.path.splitext(tdfFileName)[1]
+    def FindAllPeriodsForTimelineID(self, timelineID):
+        listOfEntries = []
 
-        trainFilePath = os.path.join(destDirPath, fileStem + "Train" + fileSuffix)
-        testFilePath = os.path.join(destDirPath, fileStem + "Test" + fileSuffix)
-
-        # Open the source file.
-        inputNameListStr = tdf.TDF_GetNamesForAllVariables()
-        resultValueName = ""
-        tdfFileReader = tdf.TDF_CreateTDFFileReader(srcTDFFilePath, inputNameListStr, resultValueName, [])
-
-        # Open the train and test files.
-        # If the files already exist, then w+ will cause them to be emptied.
-        trainFileH = open(trainFilePath, "w+")
-        testFileH = open(testFilePath, "w+")
-
-        headerStr = tdfFileReader.GetRawXMLStrForHeader()
-        headerStr = headerStr + "\n\n"
-
-        # Fix up the GUIDs in the test and train headers
-        headerStr = headerStr.replace("<DerivedFrom></DerivedFrom>", "***REPLACEME***")
-        headerStr = headerStr.replace("UUID>", "DerivedFrom>")
-        headerStrTrain = headerStr.replace("***REPLACEME***", "<UUID>" + str(UUID.uuid4()) + "</UUID>")
-        headerStrTest = headerStr.replace("***REPLACEME***", "<UUID>" + str(UUID.uuid4()) + "</UUID>")
-        trainFileH.write(headerStrTrain)
-        testFileH.write(headerStrTest)
-
-
-        floatFractionInTrain = 0.8
-        numPatients = 0
-        numPatientsInTrain = 0
-        numPatientsInTest = 0
-
-        # Iterate over every patient
-        xmlStr = tdfFileReader.GetRawXMLStrForFirstTimeline()
-        while ((xmlStr is not None) and (xmlStr != "")):
-            numPatients += 1
-
-            # Parse the text string into am XML DOM
-            currentTimelineID = -1
-            currentTimelineXMLDOM = dxml.XMLTools_ParseStringToDOM(xmlStr)
-            if (currentTimelineXMLDOM is None):
-                print("SplifTDFFileIntoTestTrain. Error from parsing string:")
-                xmlStr = tdfFileReader.GetRawXMLStrForNextTimeline()
-                continue
-            currentTimelineNode = dxml.XMLTools_GetNamedElementInDocument(currentTimelineXMLDOM, "TL")
-            if (currentTimelineNode is None):
-                TDF_Log("ParseCurrentTimelineImpl. timeline element is missing: [" + xmlStr + "]")
-                xmlStr = tdfFileReader.GetRawXMLStrForNextTimeline()
-                continue
-            idStr = currentTimelineNode.getAttribute("id")
-            if ((idStr) and (idStr != "")):
-                currentTimelineID = int(idStr)
-
-            # Look for the row with this ID.
-            # <><> FIXME BUGBUG This is slow, and the linear search really should be replaced 
-            # with a hash lookup using the ID as the key.
-            listOfEntries = []
-            for entry in self.timelineList:
-                idStrParts = entry['ID'].split("_")
-                rowTimelineIDStr = idStrParts[0]
-                if (rowTimelineIDStr == idStr):
-                    listOfEntries.append(entry)
-            # End - for entry in self.timelineList:
-
-            # Write an edited version of every list
-            for timelineEntry in listOfEntries:
-                # Find the start and stop days
-                linePropsDict = timelineEntry['p']
+        # Look for the row with this ID.
+        # <><> FIXME BUGBUG This is slow, and the linear search really should be replaced 
+        # with a hash lookup using the ID as the key.
+        for entry in self.timelineList:
+            idStrParts = entry['ID'].split("_")
+            rowTimelineID = int(idStrParts[0])
+            if (rowTimelineID == timelineID):
                 offset = 0
                 if TV_MATRIX_TIMELINE_BASE_DAY_PROPERTY in linePropsDict:
                     offset = linePropsDict[TV_MATRIX_TIMELINE_BASE_DAY_PROPERTY]
-                
-                dayNumList = timelineEntry['d'] 
-                numItems = len(dayNumList)
-                firstDayNum = dayNumList[0] + offset
-                lastDayNum = dayNumList[numItems] + offset
 
-                # Copy the XML
-                copyDOMNode = copy.deepcopy(currentTimelineXMLDOM)
-                copyTimelineNode = dxml.XMLTools_GetNamedElementInDocument(copyDOMNode, "TL")
-                if (currentTimelineNode is None):
-                    TDF_Log("ParseCurrentTimelineImpl. timeline element is missing: [" + xmlStr + "]")
-                    xmlStr = tdfFileReader.GetRawXMLStrForNextTimeline()
-                    continue
+                dayNumList = entry['d']
+                numDays = len(dayNumList)
+                periodInfoDict = {'id': rowTimelineID, 'first': dayNumList[0] + offset, 'last': dayNumList[numDays - 1] + offset}
+                listOfEntries.append(periodInfoDict)
+            # End - if (rowTimelineID == timelineID):
+        # End - for entry in self.timelineList:
 
-                # Remove any elements outside range
-                tdf.RemoveDataAroundTimeWindow(copyTimelineNode, firstDay, LastDay)
+        return listOfEntries
+    # End - FindAllPeriodsForTimelineID
 
-                # Make an XML string
-                dxml.XMLTools_RemoveAllWhitespace(copyTimelineNode)
-                resultStr = copyDOMNode.toprettyxml(indent="    ", newl="\n", encoding=None)
-
-                # Write the new timeline to either the test or the training file.
-                randNum = random.random()
-                if (randNum <= floatFractionInTrain):
-                    numPatientsInTrain += 1
-                    trainFileH.write(xmlStr)
-                else:
-                    numPatientsInTest += 1
-                    testFileH.write(xmlStr)
-            # End - for timelineEntry in listOfEntries:
-
-            # Done with this patient, go to the next.
-            xmlStr = tdfFileReader.GetRawXMLStrForNextTimeline()
-        # End - while ((xmlStr != None) and (xmlStr != "")):
-
-        # Write the footers.
-        footerStr = tdfFileReader.GetRawXMLStrForFooter()
-        trainFileH.write(footerStr)
-        testFileH.write(footerStr)
-
-        # Save and close the file.
-        tdfFileReader.Shutdown()
-        trainFileH.close()
-        testFileH.close()
-
-        return trainFilePath, testFilePath
-    # End - SplifTDFFileIntoTestTrain
 
 # End - class TimeValueMatrix
 

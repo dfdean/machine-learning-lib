@@ -945,7 +945,6 @@ class TDFFileReader():
         # These may be overridden later.
         self.fCarryForwardPreviousDataValues = fCarryForwardPreviousDataValues
         self.ConvertResultsToBools = False
-        #self.MinutesPerTimelineEntry = 60 * 24   # 1 bucket per day
         self.TimeGranularity = timeGranularity
 
         #######################
@@ -969,8 +968,10 @@ class TDFFileReader():
         self.StartCKD3bDate = TDF_INVALID_VALUE
         self.StartCKD3aDate = TDF_INVALID_VALUE
         self.NextFutureDischargeDate = TDF_INVALID_VALUE
-        self.NextFutureRapidResponseDate = TDF_INVALID_VALUE
-        self.NextFutureTransferToICUDate = TDF_INVALID_VALUE
+
+        self.OutcomeImprove = TDF_INVALID_VALUE
+        self.OutcomeWorsen = TDF_INVALID_VALUE
+        self.OutcomeFutureEndStage = TDF_INVALID_VALUE
 
         self.FutureBaselineCr = TDF_INVALID_VALUE
         self.baselineCrSeries = None
@@ -1467,7 +1468,6 @@ class TDFFileReader():
         xmlStr = dxml.XMLTools_GetChildNodeTextAsStr(self.headerNode, "UUID", "")
         return xmlStr
     # End of GetFileUUIDStr
-
 
 
     #####################################################
@@ -2009,15 +2009,44 @@ class TDFFileReader():
         self.StartCKD4Date = TDF_INVALID_VALUE
         self.StartCKD3bDate = TDF_INVALID_VALUE
         self.StartCKD3aDate = TDF_INVALID_VALUE
+        self.NextFutureDischargeDate = TDF_INVALID_VALUE
 
         self.FutureBaselineCr = TDF_INVALID_VALUE
         self.baselineCrSeries = None
         if ("baselineCr" in self.allValueVarNameList):
             self.baselineCrSeries = timefunc.CTimeSeries(TDF_TIME_GRANULARITY_DAYS, 7)
 
-        self.NextFutureDischargeDate = TDF_INVALID_VALUE
-        self.NextFutureRapidResponseDate = TDF_INVALID_VALUE
-        self.NextFutureTransferToICUDate = TDF_INVALID_VALUE
+        # Get outcome results.
+        # These are often global values that apply to the entire timeline.
+        # They may be defined after the TDF file is created, because they may
+        # apply to an edited form of the TDF file. So they cannot be stored 
+        # in the timeline. Instead, we insert them in the timeline when a TDF
+        # is opened for reading.
+        self.OutcomeImprove = TDF_INVALID_VALUE
+        attrStr = self.currentTimelineNode.getAttribute("OutcomeImprove")
+        if (attrStr is not None):
+            attrStr = attrStr.lower()
+            if ((genderStr == "true") or (genderStr == "t") or (genderStr == "1")):
+                self.OutcomeImprove = 1
+            else:
+                self.OutcomeImprove = 0
+
+        self.OutcomeWorsen = TDF_INVALID_VALUE
+        attrStr = self.currentTimelineNode.getAttribute("OutcomeWorsen")
+        if (attrStr is not None):
+            attrStr = attrStr.lower()
+            if ((genderStr == "true") or (genderStr == "t") or (genderStr == "1")):
+                self.OutcomeWorsen = 1
+            else:
+                self.OutcomeWorsen = 0
+        self.OutcomeFutureEndStage = TDF_INVALID_VALUE
+        attrStr = self.currentTimelineNode.getAttribute("OutcomeFutureEndStage")
+        if (attrStr is not None):
+            attrStr = attrStr.lower()
+            if ((genderStr == "true") or (genderStr == "t") or (genderStr == "1")):
+                self.OutcomeFutureEndStage = 1
+            else:
+                self.OutcomeFutureEndStage = 0
 
         # <> BUGBUG FIXME
         # These are used in the forward pass to fix a bug in TDF files.
@@ -2076,11 +2105,6 @@ class TDFFileReader():
             # timeline entry. Collapse all data data from the same time to a single timeline entry.
             reuseLatestData = False
             if (latestTimeLineEntryTimeCode == currentTimeCode):
-                reuseLatestData = True
-            # Outcome dates are sloppy. However, do not overuse too much
-            # because that allows a later diagnosis to overwrite the date of a much
-            # earlier data point.
-            elif ((nodeType == "oc") and (latestTimeLineEntryTimeCode >= 0)):
                 reuseLatestData = True
             # Diagnosis dates are sloppy. However, do not overuse too much
             # because that allows a later diagnosis to overwrite the date of a much
@@ -2303,6 +2327,20 @@ class TDFFileReader():
         # Some values come from the timestamp, not the contents, of the data element.
         if ("AgeInYrs" in self.allValueVarNameList):
             self.latestTimelineEntryDataList["AgeInYrs"] = int(labDateDays / 365)
+
+
+        # Store outcome results.
+        # These are often global values that apply to the entire timeline.
+        # They may be defined after the TDF file is created, because they may
+        # apply to an edited form of the TDF file. So they cannot be stored 
+        # in the timeline. Instead, we insert them in the timeline when a TDF
+        # is opened for reading.
+        if ("OutcomeImprove" in self.allValueVarNameList):
+            self.latestTimelineEntryDataList["OutcomeImprove"] = self.OutcomeImprove
+        if ("OutcomeWorsen" in self.allValueVarNameList):
+            self.latestTimelineEntryDataList["OutcomeWorsen"] = self.OutcomeWorsen
+        if ("OutcomeFutureEndStage" in self.allValueVarNameList):
+            self.latestTimelineEntryDataList["OutcomeFutureEndStage"] = self.OutcomeFutureEndStage
     # End - ProcessDataNodeForwardImpl
 
 
@@ -2720,14 +2758,6 @@ class TDFFileReader():
                 self.latestTimelineEntryDataList['HospitalAdmitDate'] = TDF_INVALID_VALUE
             # Flag_HospitalDischarge is *always* added
             self.latestTimelineEntryDataList['Flag_HospitalDischarge'] = 1
-
-        ############################################
-        elif (eventClass == "Transfer"):
-            if ('InICU' in self.allValueVarNameList):
-                if (eventValue.startswith("ICU")):
-                    self.latestTimelineEntryDataList['InICU'] = 1
-                else:
-                    self.latestTimelineEntryDataList['InICU'] = 0
 
         ############################################
         elif (eventClass == "Proc"):
@@ -3207,53 +3237,6 @@ class TDFFileReader():
                 reversePassTimeLineData["Future_Category_Discharge"] = self.ComputeOutcomeCategory(currentDayNum, 
                                                                                     self.NextFutureDischargeDate)
         # End - if (self.NextFutureDischargeDate > 0):
-
-        ##############################################
-        # Rapid Response
-        if ("Future_Days_Until_RapidResponse" in self.allValueVarNameList):
-            reversePassTimeLineData["Future_Days_Until_RapidResponse"] = TDF_INVALID_VALUE
-            if (('InHospital' in reversePassTimeLineData) 
-                    and (reversePassTimeLineData['InHospital'] > 0) 
-                    and (self.NextFutureRapidResponseDate > 0)):
-                daysUntilEvent = max((self.NextFutureRapidResponseDate - currentDayNum), 0)
-                reversePassTimeLineData["Future_Days_Until_RapidResponse"] = daysUntilEvent
-        # if (self.NextFutureRapidResponseDate > 0):
-
-        if ("Future_Category_RapidResponse" in self.allValueVarNameList):
-            reversePassTimeLineData["Future_Category_RapidResponse"] = TDF_INVALID_VALUE
-            if (('InHospital' in reversePassTimeLineData) 
-                    and (reversePassTimeLineData['InHospital'] > 0) 
-                    and (self.NextFutureRapidResponseDate > 0)):
-                reversePassTimeLineData["Future_Category_RapidResponse"] = self.ComputeOutcomeCategory(currentDayNum, 
-                                                                                    self.NextFutureRapidResponseDate)
-        # if (self.NextFutureRapidResponseDate > 0):
-
-        if ("Future_Boolean_RapidResponse" in self.allValueVarNameList):
-            reversePassTimeLineData["Future_Boolean_RapidResponse"] = 0
-            if (('InHospital' in reversePassTimeLineData)
-                    and (reversePassTimeLineData['InHospital'] > 0) 
-                    and (self.NextFutureRapidResponseDate > 0)):
-                reversePassTimeLineData["Future_Boolean_RapidResponse"] = 1
-        # if (self.NextFutureRapidResponseDate > 0):
-
-        ##############################################
-        # Transfer to ICU
-        if ("Future_Days_Until_TransferIntoICU" in self.allValueVarNameList):
-            reversePassTimeLineData["Future_Days_Until_TransferIntoICU"] = TDF_INVALID_VALUE
-            if (('InHospital' in reversePassTimeLineData) 
-                    and (reversePassTimeLineData['InHospital'] > 0)
-                    and (self.NextFutureTransferToICUDate > 0)):
-                daysUntilEvent = max((self.NextFutureTransferToICUDate - currentDayNum), 0)
-                reversePassTimeLineData["Future_Days_Until_TransferIntoICU"] = daysUntilEvent
-        # End - if (self.NextFutureTransferToICUDate > 0):
-
-        if ("Future_Boolean_TransferIntoICU" in self.allValueVarNameList):
-            reversePassTimeLineData["Future_Boolean_TransferIntoICU"] = 0
-            if (('InHospital' in reversePassTimeLineData)
-                    and (reversePassTimeLineData['InHospital'] > 0) 
-                    and (self.NextFutureTransferToICUDate > 0)):
-                reversePassTimeLineData["Future_Boolean_TransferIntoICU"] = 1
-        # End - if (self.NextFutureTransferToICUDate > 0):
     # End - CalculateAllDerivedValuesREVERSEPass
 
 
@@ -3274,22 +3257,9 @@ class TDFFileReader():
         #####################
         if (eventClass == "Admit"):
             self.NextFutureDischargeDate = TDF_INVALID_VALUE
-            self.NextFutureRapidResponseDate = TDF_INVALID_VALUE
-            self.NextFutureTransferToICUDate = TDF_INVALID_VALUE
         #####################
         elif (eventClass == "Discharge"):
-            #print("Discharge Event in reverse pass")
             self.NextFutureDischargeDate = eventDateDays
-            self.NextFutureRapidResponseDate = TDF_INVALID_VALUE
-            self.NextFutureTransferToICUDate = TDF_INVALID_VALUE
-        #####################
-        elif (eventClass == "Transfer"):
-            eventValue = eventNode.getAttribute("V")
-            if (eventValue.startswith("ICU")):
-                self.NextFutureTransferToICUDate = eventDateDays
-        #####################
-        elif (eventClass == "RapidResponse"):
-            self.NextFutureRapidResponseDate = eventDateDays
     # End - ProcessEventNodeInReverseImpl
 
 
@@ -3683,8 +3653,9 @@ class TDFFileReader():
                 # End - if ((foundIt) and (varIndexThatMustBeNonZero = valueIndex)):
 
                 if (not foundIt):
-                    # Note, foundIt may still be False even for values that default to 0, like drug levels, if we cannot find any day with
-                    # any values in the specified range. This is not a bug. Do not freak out. 
+                    # Note, foundIt may still be False even for values that default to 0, like drug levels, 
+                    # if we cannot find any day with any values in the specified range. 
+                    # This is not a bug. Do not freak out. 
                     foundAllInputs = False
                     if (numMissingInstances is not None):
                         numMissingInstances[valueIndex] += 1
@@ -4121,10 +4092,12 @@ def TDF_GetNamesForAllVariables():
 
 ################################################################################
 #
-# [TDFFileReader::RemoveDataAroundTimeWindow]
+# [TDFFileReader::RemoveDataOutsideTimeBounds]
 #
 ################################################################################
-def RemoveDataAroundTimeWindow(timelineNode, firstDay, LastDay):
+def RemoveDataOutsideTimeBound(timelineNode, firstDayNum, lastDayNum):
+    numDaysKept = 0
+
     parentNode = timelineNode
     currentNode = dxml.XMLTools_GetFirstChildNode(timelineNode)
     while (currentNode):
@@ -4142,15 +4115,36 @@ def RemoveDataAroundTimeWindow(timelineNode, firstDay, LastDay):
             labDateDays, labDateHours, labDateMins, labDateSecs = TDF_ParseTimeStamp(timeStampStr)
 
         nextPeer = dxml.XMLTools_GetAnyPeerNode(currentNode)
-        if ((labDateDays >= 0) and ((labDateDays < firstDay) or (labDateDays > LastDay))):
-            parentNode.removeChild(currentNode)
+        if (labDateDays >= 0):
+            if ((labDateDays < firstDayNum) or (labDateDays > lastDayNum)):
+                parentNode.removeChild(currentNode)
+            else:
+                numDaysKept += 1
 
         # Go to the next XML node in the TDF
         currentNode = nextPeer
     # End - while (currentNode):
-# End - RemoveDataAroundTimeWindow
+
+    return numDaysKept
+# End - RemoveDataOutsideTimeBound
 
 
+
+
+#####################################################
+# [TDFFileReader::GetTimelineAttribute]
+#####################################################
+def GetTimelineAttribute(timelineNode, attrName):
+    return timelineNode.getAttribute(attrName)
+
+
+
+
+#####################################################
+# [TDFFileReader::SetTimelineAttribute]
+#####################################################
+def SetTimelineAttribute(timelineNode, attrName, attrValue):
+    timelineNode.setAttribute(attrName, attrValue)
 
 
 

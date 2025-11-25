@@ -269,6 +269,7 @@ def DrawTripleBarGraph(titleStr, xLabelStr, xAxisNameList, yLabelStr,
         axisArray.set_title(titleStr)
     axisArray.set_xticks(xLabelLocations)
     axisArray.set_xticklabels(xAxisNameList)
+    axisArray.set_ylim(ymin=0)
 
     # Add a legend box to correlate the colors with the group
     axisArray.legend()

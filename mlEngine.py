@@ -37,7 +37,7 @@
 ################################################################################
 
 import os
-import sys
+#import sys
 import math
 import io
 import random
@@ -1306,7 +1306,6 @@ class MLEngine_LSTMNeuralNet(nn.Module):
     # Initialize the weight matrices
     #####################################################
     def __init__(self, job):
-        err = E_NO_ERROR
         super().__init__()
 
         self.ResultDataType = job.GetResultValueType()
@@ -1343,9 +1342,9 @@ class MLEngine_LSTMNeuralNet(nn.Module):
         self.HiddenToOutput = nn.Linear(self.RecurrentStateSize, layerOutputSize)
 
         # Create a non-linear.
-        if ((not fIsFinalLayer) or (self.ResultDataType == tdf.TDF_DATA_TYPE_BOOL) or (self.isLogistic)):
+        if ((self.ResultDataType == tdf.TDF_DATA_TYPE_BOOL) or (self.isLogistic)):
             nonLinearTypeStr = dxml.XMLTools_GetChildNodeTextAsStr(layerSpecXML, "NonLinear", "ReLU").lower()
-            self.nonLinear= MLEngine_MakePyTorchNonLinear(nonLinearTypeStr, self.isLogistic, True)
+            self.nonLinear = MLEngine_MakePyTorchNonLinear(nonLinearTypeStr, self.isLogistic, True)
         else:
             self.nonLinear = None
     # End - __init__
@@ -1421,7 +1420,7 @@ class MLEngine_LSTMNeuralNet(nn.Module):
             else:
                 vec = inputTensor[inputVecNum]
                 trueResult = trueResultTensor[inputVecNum][0].item()
-            savedInputVecForCurrentSample = vec
+            #savedInputVecForCurrentSample = vec
 
             # If we skipped a few days, then this is a new sequence.
             if ((prevDayNum > 0) and ((currentDayNum - prevDayNum) > maxDaysSkippedInSameSequence)):
@@ -1663,12 +1662,12 @@ class MLEngine_RNNModel(nn.Module):
                 fAddMinibatchDimension, maxDaysWithZeroValue):
         if (False):
             # Now we shift the tgt by one so with the <SOS> we predict the token at pos 1
-            y_input = trueResultTensor[:,:-1]
-            y_expected = trueResultTensor[:,1:]
+            y_input = trueResultTensor[:, :-1]
+            y_expected = trueResultTensor[:, 1:]
         
             # Get mask to mask out the next words
             sequence_length = y_input.size(1)
-            tgt_mask = self.get_tgt_mask(sequence_length)
+            #tgt_mask = self.get_tgt_mask(sequence_length)
 
             # Embedding + positional encoding - Out size = (batch_size, sequence length, dim_model)
             inputTensor = self.embedding(inputTensor) * math.sqrt(self.dim_model)
@@ -1793,329 +1792,6 @@ class MLEngine_RNNModel(nn.Module):
 
 
 
-################################################################################
-# 
-# MLEngine_PositionalEncoding
-# 
-# This is used by MLEngine_TransformerModel
-# This will inject relative or absolute position of the tokens in the sequence.
-#
-# Derived from:
-#   https://github.com/pytorch/examples/blob/main/word_language_model/model.py
-#
-# The positional encodings have the same dimension as the embeddings, 
-# so that the two can be summed.
-# Here, we use sine and cosine functions of different frequencies.
-#        PosEncoder(pos, 2i) = sin(pos/10000^(2i/d_model))
-#        PosEncoder(pos, 2i+1) = cos(pos/10000^(2i/d_model))
-#        where pos is the word position and i is the embed idx
-#
-#        d_model: the embed dim (required).
-#        dropout: the dropout value (default=0.1).
-#        max_len: the max. length of the incoming sequence (default=5000).
-#
-# Example: pos_encoder = PositionalEncoding(d_model)
-################################################################################
-class MLEngine_PositionalEncoding(nn.Module):
-    #####################################################
-    # 
-    # [MLEngine_PositionalEncoding::__init__]
-    #
-    # Initialize the weight matrices
-    #####################################################
-    def __init__(self, d_model, dropout=0.1, max_len=5000):
-        super().__init__()
-        self.dropout = nn.Dropout(p=dropout)
-
-        # Encoding - From formula
-        pos_encoding = torch.zeros(max_len, dim_model)
-        positions_list = torch.arange(0, max_len, dtype=torch.float).view(-1, 1) # 0, 1, 2, 3, 4, 5
-        division_term = torch.exp(torch.arange(0, dim_model, 2).float() * (-math.log(10000.0)) / dim_model) # 1000^(2i/dim_model)
-        
-        # PE(pos, 2i) = sin(pos/1000^(2i/dim_model))
-        pos_encoding[:, 0::2] = torch.sin(positions_list * division_term)
-        
-        # PE(pos, 2i + 1) = cos(pos/1000^(2i/dim_model))
-        pos_encoding[:, 1::2] = torch.cos(positions_list * division_term)
-        
-        # Saving buffer (same as parameter without gradients needed)
-        pos_encoding = pos_encoding.unsqueeze(0).transpose(0, 1)
-        self.register_buffer("pos_encoding",pos_encoding)
-    # End - __init__
-
-    #####################################################
-    # 
-    #   Args:
-    #    x: the sequence fed to the positional encoder model (required).
-    # x has Shape [sequence length, batch size, embed dim]
-    # output: [sequence length, batch size, embed dim]
-    #####################################################
-    def forward(self, x):
-        return self.dropout(token_embedding + self.pos_encoding[:token_embedding.size(0), :])
-    # End - forward
-# End - MLEngine_PositionalEncoding
-
-
-
-
-
-
-################################################################################
-# 
-# MLEngine_TransformerModel
-# 
-# https://github.com/pytorch/examples/blob/main/word_language_model/model.py
-#
-# https://colab.research.google.com/github/dlmacedo/starter-academic/blob/master/content/courses/deeplearning/notebooks/pytorch/transformer_tutorial.ipynb
-#
-# Model from "A detailed guide to Pytorch's nn.Transformer() module.", by
-#    Daniel Melchor: https://medium.com/p/c80afbc9ffb1/
-#
-# Positional encoding weighs different inputs depending on their position in the sequence.
-# This is important, because the order of the input sequence is not considered by
-# the transformer blocks. To correct this, we also provide a vector of positions in the
-# sequence as one of the inputs. This is more than just the index number, but
-# a function of the sin or cos of the position depending on whether the position is an
-# even or odd number.
-#
-#
-# Use crossentropyloss, default LR=0.01
-#
-################################################################################
-class MLEngine_TransformerModel(nn.Module):
-
-    #####################################################
-    # 
-    # [MLEngine_TransformerModel::__init__]
-    #
-    # Initialize the weight matrices
-    #####################################################
-    def __init__(self, job):
-        err = E_NO_ERROR
-        super().__init__()
-
-        self.ResultDataType = job.GetResultValueType()
-        self.isLogistic = job.GetIsLogisticNetwork()
-        inputNameListStr = job.GetNetworkInputVarNames()
-        inputNameList = inputNameListStr.split(tdf.VARIABLE_LIST_SEPARATOR)
-        self.NumInputVars = len(inputNameList)
-
-        ################################
-        # Get the output layer.
-        resultValueName = job.GetNetworkOutputVarName()
-        self.NumOutputCategories = tdf.TDF_GetNumClassesForVariable(resultValueName)
-        layerSpecXML = job.GetNetworkLayerSpec("OutputLayer")
-        if (layerSpecXML is None):
-            raise Exception()
-
-        if (self.isLogistic):
-            # The output is a single number that is the probability.
-            layerOutputSize = 1
-        else:
-            layerOutputSize = self.NumOutputCategories
-
-        # Build the network
-        self.model_type = "Transformer"
-        self.dim_model = dim_model
-
-        # LAYERS
-        num_tokens=4
-        dim_model=8
-        num_heads=2
-        num_encoder_layers=3
-        num_decoder_layers=3
-        dropout_p=0.1
-        self.positional_encoder = MLEngine_PositionalEncoding(dim_model=dim_model, dropout_p=dropout_p, max_len=5000)
-        self.embedding = nn.Embedding(num_tokens, dim_model)
-        self.transformer = nn.Transformer(
-                                    d_model=dim_model,
-                                    nhead=num_heads,
-                                    num_encoder_layers=num_encoder_layers,
-                                    num_decoder_layers=num_decoder_layers,
-                                    dropout=dropout_p)
-
-        self.out = nn.Linear(dim_model, num_tokens)
-    # End - __init__
-
-
-
-    #####################################################
-    #
-    # [MLEngine_TransformerModel.forward]
-    #
-    # Forward prop.
-    #
-    # Src size must be (batch_size, src sequence length)
-    # Tgt size must be (batch_size, tgt sequence length)
-    #####################################################
-    def forward(self, job, fIsTraining, numDataSamples, inputTensor, trueResultTensor, dayNumArray, 
-                fAddMinibatchDimension, maxDaysWithZeroValue):
-        # Now we shift the tgt by one so with the <SOS> we predict the token at pos 1
-        y_input = trueResultTensor[:,:-1]
-        y_expected = trueResultTensor[:,1:]
-        
-        # Get mask to mask out the next words
-        sequence_length = y_input.size(1)
-        tgt_mask = self.get_tgt_mask(sequence_length)
-
-        # Embedding + positional encoding - Out size = (batch_size, sequence length, dim_model)
-        inputTensor = self.embedding(inputTensor) * math.sqrt(self.dim_model)
-        trueResultTensor = self.embedding(trueResultTensor) * math.sqrt(self.dim_model)
-        inputTensor = self.positional_encoder(inputTensor)
-        trueResultTensor = self.positional_encoder(trueResultTensor)
-
-        # we permute to obtain size (sequence length, batch_size, dim_model),
-        # We could use the parameter batch_first=True, but our KDL version doesn't support it yet        
-        inputTensor = inputTensor.permute(1, 0, 2)
-        y_input = y_input.permute(1, 0, 2)
-
-        # Transformer blocks - Out size = (sequence length, batch_size, num_tokens)
-        resultList = self.transformer(inputTensor, y_input, 
-                            tgt_mask=tgt_mask, 
-                            src_key_padding_mask=src_pad_mask, 
-                            tgt_key_padding_mask=tgt_pad_mask)
-        resultList = self.out(resultList)
-
-        # Permute pred to have batch size first again
-        resultList = resultList.permute(1, 2, 0)     
-
-        return numValidResults, resultList, y_expected, numDaysForResult
-    # End - forward
-
-
-
-
-    #####################################################
-    #
-    # [MLEngine_TransformerModel.get_tgt_mask]
-    #
-    #####################################################
-    def get_tgt_mask(self, size):
-        # Generates a squeare matrix where the each row allows one word more to be seen
-        mask = torch.tril(torch.ones(size, size) == 1) # Lower triangular matrix
-        mask = mask.float()
-        mask = mask.masked_fill(mask == 0, float('-inf')) # Convert zeros to -inf
-        mask = mask.masked_fill(mask == 1, float(0.0)) # Convert ones to 0
-        
-        # EX for size=5:
-        # [[0., -inf, -inf, -inf, -inf],
-        #  [0.,   0., -inf, -inf, -inf],
-        #  [0.,   0.,   0., -inf, -inf],
-        #  [0.,   0.,   0.,   0., -inf],
-        #  [0.,   0.,   0.,   0.,   0.]]
-        
-        return mask
-    # End - get_tgt_mask
-
-
-
-    #####################################################
-    #
-    # [MLEngine_TransformerModel.create_pad_mask]
-    #
-    #####################################################
-    def create_pad_mask(self, matrix: torch.tensor, pad_token: int) -> torch.tensor:
-        # If matrix = [1,2,3,0,0,0] where pad_token=0, the result mask is
-        # [False, False, False, True, True, True]
-        return (matrix == pad_token)
-    # End - create_pad_mask
-
-
-
-    #####################################################
-    #
-    # [MLEngine_TransformerModel.SaveNeuralNetstate]
-    #
-    #####################################################
-    def SaveNeuralNetstate(self, job):
-        # Save to io.BytesIO buffer
-        ioBuffer = io.BytesIO()
-        torch.save(self.transformer, ioBuffer)
-        stateBytes = ioBuffer.getvalue()
-
-        # Convert the binary data to a series of hex chars, which is a string
-        # Functions like stateBytes.decode("utf-8") do not work.
-        stateStr = stateBytes.hex()
-
-        job.SetNamedStateAsStr(TRANSFORMER_SAVED_STATE_NAME, stateStr)
-    # End - SaveNeuralNetstate
-
-
-    #####################################################
-    #
-    # [MLEngine_TransformerModel.RestoreNetState]
-    #
-    #####################################################
-    def RestoreNetState(self, job):
-        stateStr = job.GetNamedStateAsStr(TRANSFORMER_SAVED_STATE_NAME, "")
-        if ((stateStr is None) or ("" == stateStr)):
-            return
-
-        #print("MLEngine_LSTMNeuralNet.RestoreNetState. stateStr=" + str(stateStr))
-        #print("MLEngine_LSTMNeuralNet.RestoreNetState. stateStr.type=" + str(type(stateStr)))
-        #print("MLEngine_LSTMNeuralNet.RestoreNetState. stateStr.len=" + str(len(stateStr)))
-
-        # Convert the string of Hex characters into a byte sequence.
-        stateBytes = bytearray.fromhex(stateStr)
-        #print("MLEngine_LSTMNeuralNet.RestoreNetState. stateBytes=" + str(stateBytes))
-        #print("MLEngine_LSTMNeuralNet.RestoreNetState. stateBytes.type=" + str(type(stateBytes)))
-        #print("MLEngine_LSTMNeuralNet.RestoreNetState. stateBytes.len=" + str(len(stateBytes)))
-
-        ioBuffer = io.BytesIO(stateBytes)
-
-        # Set weights_only=True to silence the warning:
-        # FutureWarning: You are using torch.load with weights_only=False (the current default value), 
-        # which uses the default pickle module implicitly. It is possible to construct malicious pickle
-        # data which will execute arbitrary code during unpickling 
-        # (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details).
-        self.transformer = torch.load(ioBuffer, weights_only=False)
-    # End - RestoreNetState
-
-
-
-
-    #####################################################
-    #
-    # [MLEngine_TransformerModel.CheckState
-    #
-    #####################################################
-    def CheckState(self, job):
-        return
-    # End - CheckState
-
-
-    #####################################################
-    # Make sure that backprop correctly updated the local network 
-    #####################################################
-    def ValidateAndFixModel(self, job, loss, predictionTensor, trueResultTensor):
-        return
-    # End - ValidateAndFixModel
-
-
-    #####################################################
-    #####################################################
-    def GetInputWeights(self):
-        return None
-
-    #####################################################
-    # DebugPrint
-    #####################################################
-    def DebugPrint(self):
-        return
-    # End - DebugPrint
-
-    #####################################################
-    # MLEngine_TransformerModel.NeedTrueResultForEveryInput
-    #####################################################
-    def NeedTrueResultForEveryInput(self):
-        return False
-    # End - NeedTrueResultForEveryInput
-
-# class MLEngine_TransformerModel
-
-
-
-
 
 
 ################################################################################
@@ -2151,6 +1827,9 @@ def MLEngine_ValidatePredictedResult(testTensor):
 
     return fIsValid
 # End - MLEngine_ValidatePredictedResult
+
+
+
 
 
 
@@ -2275,7 +1954,6 @@ def MLEngine_TrainGroupOfDataPoints(job, localNeuralNet, localLossFunction, loca
                                     inputArray, trueResultArray, dayNumArray, numDataSamples, 
                                     fAddMinibatchDimension, maxDaysWithZeroValue):
     localNeuralNet.CheckState(job)
-    fEveryInputMakesPrediction = localNeuralNet.NeedTrueResultForEveryInput()
     epochNum = job.GetEpochNum()
 
     # Normalize all inputs using the value from preflight
@@ -2460,7 +2138,7 @@ def MLEngine_TestGroupOfDataPoints(job, localNeuralNet, cudaIsAvailable, gpuDevi
     #inputArray = MLEngine_NormalizeInputs(job, numDataSamples, inputArray, fAddMinibatchDimension)
 
     # Build a number of inputs that eventually lead to each output
-    fEveryInputMakesPrediction = localNeuralNet.NeedTrueResultForEveryInput()
+    # fEveryInputMakesPrediction = localNeuralNet.NeedTrueResultForEveryInput()
     numSequencesForEachResult = []
     if (True):   # (fEveryInputMakesPrediction):
         numPreviousInputSequences = 0
@@ -2725,8 +2403,6 @@ def MLEngine_TrainOneFilePartitionImpl(job, currentPartitionStart, currentPartit
 
     # Get some properties that are used for each training.
     lossTypeStr = job.GetTrainingParamStr(mlJob.TRAINING_OPTION_LOSS_FUNCTION_ELEMENT_NAME, "").lower()
-    priorityPolicy = job.GetTrainingParamStr(mlJob.TRAINING_OPTION_RESULT_PRIORITY_POLICY_ELEMENT_NAME, "").lower()
-
     fEveryInputMakesPrediction = localNeuralNet.NeedTrueResultForEveryInput()
 
     # In some cases, we add a batches dimension to all data:

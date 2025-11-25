@@ -341,7 +341,7 @@ class CGenericTimeValue():
         if (self.TimeGranularity == tdf.TDF_TIME_GRANULARITY_DAYS):
             timeCode = timeInDays
         else:                
-            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMin, timeSecs)
+            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMinutes, timeSeconds)
 
         newValInfo = {'v': value, 't': timeCode}
         self.PrevValue = self.CurrentValue
@@ -406,7 +406,7 @@ class CAccelerationValue():
         if (self.TimeGranularity == tdf.TDF_TIME_GRANULARITY_DAYS):
             timeCode = timeInDays
         else:                
-            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMin, timeSecs)
+            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMinutes, timeSeconds)
 
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.
@@ -504,7 +504,7 @@ class CDeltaValue():
         if (self.TimeGranularity == tdf.TDF_TIME_GRANULARITY_DAYS):
             timeCode = timeInDays
         else:                
-            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMin, timeSecs)
+            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMinutes, timeSeconds)
 
         # Pop any values that are older than we need.
         while (len(self.ValueQueue) > 0):
@@ -582,7 +582,7 @@ class CSum():
         if (self.TimeGranularity == tdf.TDF_TIME_GRANULARITY_DAYS):
             timeCode = timeInDays
         else:                
-            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMin, timeSecs)
+            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMinutes, timeSeconds)
 
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.
@@ -656,7 +656,7 @@ class CRunningAvgValue():
         if (self.TimeGranularity == tdf.TDF_TIME_GRANULARITY_DAYS):
             timeCode = timeInDays
         else:                
-            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMin, timeSecs)
+            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMinutes, timeSeconds)
 
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.
@@ -730,7 +730,7 @@ class CRateValue():
         if (self.TimeGranularity == tdf.TDF_TIME_GRANULARITY_DAYS):
             timeCode = timeInDays
         else:                
-            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMin, timeSecs)
+            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMinutes, timeSeconds)
 
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.
@@ -830,9 +830,9 @@ class CRateCrossValue():
             return tdf.TDF_INVALID_VALUE
 
         if ((self.fDetectFasterRate) and (shortRateVal >= (self.fFuzzinessMargin * longRateVal))):
-            return(1)
+            return 1
 
-        return(0)
+        return 0
     # End of ComputeNewValue
 
 # End - class CRateCrossValue
@@ -883,7 +883,7 @@ class CBollingerValue():
         if (self.TimeGranularity == tdf.TDF_TIME_GRANULARITY_DAYS):
             timeCode = timeInDays
         else:                
-            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMin, timeSecs)
+            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMinutes, timeSeconds)
 
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.
@@ -973,7 +973,7 @@ class CRangeValue():
         if (self.TimeGranularity == tdf.TDF_TIME_GRANULARITY_DAYS):
             timeCode = timeInDays
         else:                
-            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMin, timeSecs)
+            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMinutes, timeSeconds)
 
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.
@@ -1072,7 +1072,7 @@ class CPercentChangeValue():
         if (self.TimeGranularity == tdf.TDF_TIME_GRANULARITY_DAYS):
             timeCode = timeInDays
         else:                
-            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMin, timeSecs)
+            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMinutes, timeSeconds)
 
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.
@@ -1164,7 +1164,7 @@ class CThresholdValue():
         if (self.TimeGranularity == tdf.TDF_TIME_GRANULARITY_DAYS):
             timeCode = timeInDays
         else:                
-            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMin, timeSecs)
+            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMinutes, timeSeconds)
 
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.
@@ -1262,7 +1262,7 @@ class CVolatilityValue():
         if (self.TimeGranularity == tdf.TDF_TIME_GRANULARITY_DAYS):
             timeCode = timeInDays
         else:                
-            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMin, timeSecs)
+            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMin, timeSeconds)
 
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.

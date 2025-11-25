@@ -37,17 +37,12 @@ import statistics
 from scipy import stats
 from scipy.stats import spearmanr
 import numpy as np
-
 import xml.dom
-import xml.dom.minidom
-from xml.dom.minidom import parseString
-from xml.dom.minidom import getDOMImplementation
 
 import xmlTools as dxml
 import tdfFile as tdf
 import dataShow as DataShow
 import mlJob as mlJob
-import mlEngine as mlEngine
 import mlEngine as mlEngine
 import tdfTimeFunctions as timefunc
 import medGraph as MedGraph

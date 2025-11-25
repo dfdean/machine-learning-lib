@@ -28,6 +28,7 @@
 # job files. This encapsulates all XML dependencies, so if we change the XML library,
 # ideally only this module needs to be changed.
 ################################################################################
+import copy
 
 import xml.dom
 import xml.dom.minidom
@@ -345,7 +346,7 @@ def XMLTools_RemoveAllWhitespace(parentNode):
 
         if (childElement.nodeType == 3):
             textStr = childElement.nodeValue
-            if(textStr.lstrip() == ""):
+            if (textStr.lstrip() == ""):
                 parentNode.removeChild(childElement)
         else:
             XMLTools_RemoveAllWhitespace(childElement)
@@ -580,3 +581,55 @@ def XMLTools_GetChildNodeFromPath(rootXMLNode, pathName):
 
 
 
+################################################################################
+#
+# [XMLTools_CreateShallowCopyOfNode]
+#
+################################################################################
+def XMLTools_CreateShallowCopyOfNode(originalNode):
+    if (originalNode is None):
+        return None
+
+    nodeCopy = originalNode.ownerDocument.createElement(originalNode.tagName)
+    for attr in originalNode.attributes.values():
+        XMLTools_SetAttribute(nodeCopy, attr.name, attr.value)
+
+    return nodeCopy
+# End - XMLTools_CreateShallowCopyOfNode
+
+
+
+
+
+################################################################################
+#
+# [XMLTools_AppendCopyOfChildNodeWithTextOnly]
+#
+################################################################################
+def XMLTools_AppendCopyOfChildNodeWithTextOnly(parentNode, originalChildNode):
+    if ((parentNode is None) or (originalChildNode is None)):
+        return
+
+    # originalChildNode came from some document, so we can be confident that it
+    # has an owner document. The parentNode may not yet be attached to a document.
+    childNodeCopy = XMLTools_CreateShallowCopyOfNode(originalChildNode)
+
+    # Make a copy of any text below this element.
+    resultBytes = ""
+    currentNode = originalChildNode.firstChild
+    while (currentNode):
+        if (currentNode.nodeType == 3):
+            resultBytes = resultBytes + currentNode.nodeValue
+        # End - if (currentNode.nodeType == 3)
+
+        currentNode = currentNode.nextSibling
+    # while (currentNode)
+
+    # Convert any Unicode string to UTF-8
+    resultStr = resultBytes
+    # resultBytes.decode('utf-8')
+    textNode = originalChildNode.ownerDocument.createTextNode(resultStr)
+    childNodeCopy.appendChild(textNode)
+
+    parentNode.appendChild(childNodeCopy)
+# End - XMLTools_AppendCopyOfChildNodeWithTextOnly

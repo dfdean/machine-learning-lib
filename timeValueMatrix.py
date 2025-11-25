@@ -221,6 +221,7 @@ class TimeValueMatrix():
 
 
 
+
     #####################################################
     #
     # [TimeValueMatrix::CheckState]
@@ -983,29 +984,29 @@ class TimeValueMatrix():
         # Iterate over every timeline
         for timelineEntry in self.timelineList:
             dayNumList = timelineEntry['d'] 
-
             numItems = len(dayNumList)
-            minSequenceSize = min(minSequenceSize, numItems)
-            maxSequenceSize = max(maxSequenceSize, numItems)
-            sumAllSequenceSizes += numItems
-
             if (numItems > 0):
-                currentDuration = dayNumList[numItems - 1] - dayNumList[0]
-            else:
-                currentDuration = 0
-            minSequenceDuration = min(minSequenceDuration, currentDuration)
-            maxSequenceDuration = max(maxSequenceDuration, currentDuration)
-            sumAllSequenceDurations += currentDuration
+                minSequenceSize = min(minSequenceSize, numItems)
+                maxSequenceSize = max(maxSequenceSize, numItems)
+                sumAllSequenceSizes += numItems
 
-            totalNumSequences += 1
+                currentDuration = dayNumList[numItems - 1] - dayNumList[0]
+                minSequenceDuration = min(minSequenceDuration, currentDuration)
+                maxSequenceDuration = max(maxSequenceDuration, currentDuration)
+                sumAllSequenceDurations += currentDuration
+                totalNumSequences += 1
+            # End - if (numItems > 0):
         # End - for timeline in self.timelineList
 
         # Collect the stats into a dict we can return.
-        avgSequenceLen = 0
-        avgSequenceDuration = 0
         if (totalNumSequences > 0):
             avgSequenceLen = round(float(sumAllSequenceSizes / totalNumSequences))
             avgSequenceDuration = round(float(sumAllSequenceDurations / totalNumSequences))
+        else:
+            avgSequenceLen = 0
+            avgSequenceDuration = 0
+            minSequenceSize = 0
+            minSequenceDuration = 0
 
         statsDict = {'NumSeq': totalNumSequences, 'AvgLen': avgSequenceLen, 'MinLen': minSequenceSize, 'MaxLen': maxSequenceSize, 'AvgDur': avgSequenceDuration, 'MinDur': minSequenceDuration, 'MaxDur': maxSequenceDuration}
 
@@ -2304,11 +2305,12 @@ class TimeValueMatrix():
             idStrParts = entry['ID'].split("_")
             rowTimelineID = int(idStrParts[0])
             if (rowTimelineID == timelineID):
+                dayNumList = entry['d']
+                linePropsDict = entry['p']
                 offset = 0
                 if TV_MATRIX_TIMELINE_BASE_DAY_PROPERTY in linePropsDict:
                     offset = linePropsDict[TV_MATRIX_TIMELINE_BASE_DAY_PROPERTY]
 
-                dayNumList = entry['d']
                 numDays = len(dayNumList)
                 periodInfoDict = {'id': rowTimelineID, 'first': dayNumList[0] + offset, 'last': dayNumList[numDays - 1] + offset}
                 listOfEntries.append(periodInfoDict)

@@ -2520,13 +2520,6 @@ class MLJob():
             
 
     #####################################################
-    # [MLJob::GetJobName]
-    #####################################################
-    def GetJobStatus(self):
-        return self.GetJobControlStr(JOB_CONTROL_STATUS_ELEMENT_NAME, "")
-
-
-    #####################################################
     # [MLJob::GetJobDescription]
     #####################################################
     def GetJobDescription(self):
@@ -3013,7 +3006,7 @@ class MLJob():
     #
     #####################################################
     def AddCentroids(self, valueList, weight, avgDist, maxDist):
-        newDictEntry = {'ValList': inputList, 'W': weight, 'A': avgDist, 'M': maxDist}
+        newDictEntry = {'ValList': valueList, 'W': weight, 'A': avgDist, 'M': maxDist}
         self.PreflightCentroids.append(newDictEntry)
         self.NumCentroids += 1
     # End of AddCentroids

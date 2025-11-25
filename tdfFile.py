@@ -968,10 +968,7 @@ class TDFFileReader():
         self.StartCKD3bDate = TDF_INVALID_VALUE
         self.StartCKD3aDate = TDF_INVALID_VALUE
         self.NextFutureDischargeDate = TDF_INVALID_VALUE
-
-        self.OutcomeImprove = TDF_INVALID_VALUE
-        self.OutcomeWorsen = TDF_INVALID_VALUE
-        self.OutcomeFutureEndStage = TDF_INVALID_VALUE
+        self.OutcomeResult = TDF_INVALID_VALUE
 
         self.FutureBaselineCr = TDF_INVALID_VALUE
         self.baselineCrSeries = None
@@ -1408,7 +1405,7 @@ class TDFFileReader():
             currentDay, secs = TDF_ParseTimeStampIntoDaysSecs(currentTimeCode)
             latestValues = timelineEntry['data']
 
-            if ((fOnlyOneValuePerTimeEntry) and (prevDayNum == currentDay) and (prevValueDict is not None)):
+            if ((fOnlyOneValuePerTimeEntry) and (prevDayNum == currentDay) and (prevDayDict is not None)):
                 currentDayDict = prevDayDict
             else:
                 # Start a new day
@@ -1930,12 +1927,12 @@ class TDFFileReader():
 
         self.CurrentWtInKg = TDF_INVALID_VALUE
         wtInKgStr = self.currentTimelineNode.getAttribute("wt")
-        if ((wtInKgStr) and (wtInKgStr != "")):
+        if ((wtInKgStr is not None) and (wtInKgStr != "")):
             self.CurrentWtInKg = float(wtInKgStr)
 
         self.CurrentTimelineID = TDF_INVALID_VALUE
         idStr = self.currentTimelineNode.getAttribute("id")
-        if ((idStr) and (idStr != "")):
+        if ((idStr is not None) and (idStr != "")):
             self.CurrentTimelineID = int(idStr)
 
         # Generate a timeline of actual and derived data values.
@@ -2022,31 +2019,14 @@ class TDFFileReader():
         # apply to an edited form of the TDF file. So they cannot be stored 
         # in the timeline. Instead, we insert them in the timeline when a TDF
         # is opened for reading.
-        self.OutcomeImprove = TDF_INVALID_VALUE
-        attrStr = self.currentTimelineNode.getAttribute("OutcomeImprove")
+        self.OutcomeResult = TDF_INVALID_VALUE
+        attrStr = self.currentTimelineNode.getAttribute("Outcome")
         if (attrStr is not None):
             attrStr = attrStr.lower()
-            if ((genderStr == "true") or (genderStr == "t") or (genderStr == "1")):
-                self.OutcomeImprove = 1
+            if ((attrStr == "true") or (attrStr == "t") or (attrStr == "1")):
+                self.OutcomeResult = 1
             else:
-                self.OutcomeImprove = 0
-
-        self.OutcomeWorsen = TDF_INVALID_VALUE
-        attrStr = self.currentTimelineNode.getAttribute("OutcomeWorsen")
-        if (attrStr is not None):
-            attrStr = attrStr.lower()
-            if ((genderStr == "true") or (genderStr == "t") or (genderStr == "1")):
-                self.OutcomeWorsen = 1
-            else:
-                self.OutcomeWorsen = 0
-        self.OutcomeFutureEndStage = TDF_INVALID_VALUE
-        attrStr = self.currentTimelineNode.getAttribute("OutcomeFutureEndStage")
-        if (attrStr is not None):
-            attrStr = attrStr.lower()
-            if ((genderStr == "true") or (genderStr == "t") or (genderStr == "1")):
-                self.OutcomeFutureEndStage = 1
-            else:
-                self.OutcomeFutureEndStage = 0
+                self.OutcomeResult = 0
 
         # <> BUGBUG FIXME
         # These are used in the forward pass to fix a bug in TDF files.
@@ -2128,8 +2108,8 @@ class TDFFileReader():
                 # But, don't spend the extra space storing this if secs=0 always and dayNum is just the timestamp.
                 # However, this means the values in each entry will be different depending on the time granularity.
                 #if (self.TimeGranularity != TDF_TIME_GRANULARITY_DAYS):
-                    #timelineEntry['Day'] = labDateDays
-                    #timelineEntry['Sec'] = labDateSecs + (labDateMins * 60) + (labDateHours * 3600)
+                #timelineEntry['Day'] = labDateDays
+                #timelineEntry['Sec'] = labDateSecs + (labDateMins * 60) + (labDateHours * 3600)
 
                 # Note: This may make a new timeline entry before we have confirmed that there is new data.
                 # It ensures that we will include days for meds only without labs
@@ -2336,11 +2316,7 @@ class TDFFileReader():
         # in the timeline. Instead, we insert them in the timeline when a TDF
         # is opened for reading.
         if ("OutcomeImprove" in self.allValueVarNameList):
-            self.latestTimelineEntryDataList["OutcomeImprove"] = self.OutcomeImprove
-        if ("OutcomeWorsen" in self.allValueVarNameList):
-            self.latestTimelineEntryDataList["OutcomeWorsen"] = self.OutcomeWorsen
-        if ("OutcomeFutureEndStage" in self.allValueVarNameList):
-            self.latestTimelineEntryDataList["OutcomeFutureEndStage"] = self.OutcomeFutureEndStage
+            self.latestTimelineEntryDataList["Outcome"] = self.OutcomeResult
     # End - ProcessDataNodeForwardImpl
 
 
@@ -3622,7 +3598,7 @@ class TDFFileReader():
 
                 # Get the lab value itself.
                 if (valueIndex == self.DaysSincePrevResultIndex):
-                    fFoundIt = True
+                    foundIt = True
                     matchingRangeDay = timelineEntry['TimeCode']
                     if (prevReturnedTimeCode < 0):
                         result = 30
@@ -3639,13 +3615,11 @@ class TDFFileReader():
 
                 # Some values, like meds, may be zero, and are still considered for short stretches. For example, you
                 # can skip a day or two, but not long periods of time.
-                fIgnoreRunOfZeroValues = False
                 if ((foundIt) and (self.varIndexThatMustBeNonZero == valueIndex) and (self.maxZeroDays > 0)):
                     if (result == 0):
                         if ((lastNonZeroEntryIndex < 0) 
                                 or ((timelineEntry['TimeCode'] - lastNonZeroEntryIndex) > self.maxZeroDays)):
                             foundIt = False
-                            fIgnoreRunOfZeroValues = True
                         # End - if ((lastNonZeroEntryIndex < 0) or ....
                     # End - if (result == 0):
                     else:
@@ -4092,18 +4066,21 @@ def TDF_GetNamesForAllVariables():
 
 ################################################################################
 #
-# [TDFFileReader::RemoveDataOutsideTimeBounds]
+# [TDFFileReader::CopyTimelineWithinTimeBounds]
 #
 ################################################################################
-def RemoveDataOutsideTimeBound(timelineNode, firstDayNum, lastDayNum):
+def CopyTimelineWithinTimeBounds(origTimelineNode, firstDayNum, lastDayNum):
     numDaysKept = 0
 
-    parentNode = timelineNode
-    currentNode = dxml.XMLTools_GetFirstChildNode(timelineNode)
-    while (currentNode):
-        nodeType = dxml.XMLTools_GetElementName(currentNode).lower()
+    # Copy the XML top level
+    copyTimelineNode = dxml.XMLTools_CreateShallowCopyOfNode(origTimelineNode)
+    if (copyTimelineNode is None):
+        return None, 0
 
+    currentNode = dxml.XMLTools_GetFirstChildNode(origTimelineNode)
+    while (currentNode is not None):
         # We ignore any nodes other than Data and Events
+        nodeType = dxml.XMLTools_GetElementName(currentNode).lower()
         if (nodeType not in ('e', 'd')):
             # Go to the next XML node in the TDF
             currentNode = dxml.XMLTools_GetAnyPeerNode(currentNode)
@@ -4114,37 +4091,17 @@ def RemoveDataOutsideTimeBound(timelineNode, firstDayNum, lastDayNum):
         if ((timeStampStr is not None) and (timeStampStr != "")):
             labDateDays, labDateHours, labDateMins, labDateSecs = TDF_ParseTimeStamp(timeStampStr)
 
-        nextPeer = dxml.XMLTools_GetAnyPeerNode(currentNode)
-        if (labDateDays >= 0):
-            if ((labDateDays < firstDayNum) or (labDateDays > lastDayNum)):
-                parentNode.removeChild(currentNode)
-            else:
-                numDaysKept += 1
+        if ((labDateDays >= 0) and (labDateDays >= firstDayNum) and (labDateDays <= lastDayNum)):
+            dxml.XMLTools_AppendCopyOfChildNodeWithTextOnly(copyTimelineNode, currentNode)
+            numDaysKept += 1
 
         # Go to the next XML node in the TDF
-        currentNode = nextPeer
+        currentNode = dxml.XMLTools_GetAnyPeerNode(currentNode)
     # End - while (currentNode):
 
-    return numDaysKept
-# End - RemoveDataOutsideTimeBound
+    return copyTimelineNode, numDaysKept
+# End - CopyTimelineWithinTimeBounds
 
-
-
-
-#####################################################
-# [TDFFileReader::GetTimelineAttribute]
-#####################################################
-def GetTimelineAttribute(timelineNode, attrName):
-    return timelineNode.getAttribute(attrName)
-
-
-
-
-#####################################################
-# [TDFFileReader::SetTimelineAttribute]
-#####################################################
-def SetTimelineAttribute(timelineNode, attrName, attrValue):
-    timelineNode.setAttribute(attrName, attrValue)
 
 
 

@@ -179,8 +179,8 @@ g_LabValueInfo = {
     ##############################
     # Derived values
     'GFR': {'minVal': 5.0, 'maxVal': 60.0, 'dataType': TDF_DATA_TYPE_FLOAT, 'ActionAfterEachTimePeriod': "", 'Calculated': True, 'VariableDependencies': "WtKg;AgeInYrs;Cr;IsMale", 'ValueWordIncrement': 1.0},
-    'UPCR': {'minVal': 0.1, 'maxVal': 10.0, 'dataType': TDF_DATA_TYPE_FLOAT, 'ActionAfterEachTimePeriod': "", 'Calculated': True, 'VariableDependencies': "UPEPTProt;UPCR;UProt;UCr", 'ValueWordIncrement': 0.1},
-    'UACR': {'minVal': 0.01, 'maxVal': 5.0, 'dataType': TDF_DATA_TYPE_FLOAT, 'ActionAfterEachTimePeriod': "", 'Calculated': True, 'VariableDependencies': "UPEPAlb;UAlb;UCr", 'ValueWordIncrement': 0.1},
+    'UPCR': {'minVal': 0.1, 'maxVal': 10.0, 'dataType': TDF_DATA_TYPE_FLOAT, 'ActionAfterEachTimePeriod': "", 'Calculated': True, 'VariableDependencies': "UProt;UCr", 'ValueWordIncrement': 0.1},
+    'UACR': {'minVal': 0.01, 'maxVal': 5.0, 'dataType': TDF_DATA_TYPE_FLOAT, 'ActionAfterEachTimePeriod': "", 'Calculated': True, 'VariableDependencies': "UAlb;UCr", 'ValueWordIncrement': 0.1},
     'FENa': {'minVal': 0.01, 'maxVal': 2.0, 'dataType': TDF_DATA_TYPE_FLOAT, 'ActionAfterEachTimePeriod': "", 'Calculated': True, 'VariableDependencies': "Cr;Na;UCr;UNa", 'ValueWordIncrement': 0.01},
     'FEUrea': {'minVal': 5.0, 'maxVal': 50.0, 'dataType': TDF_DATA_TYPE_FLOAT, 'ActionAfterEachTimePeriod': "", 'Calculated': True, 'VariableDependencies': "Cr;BUN;UCr;UUN", 'ValueWordIncrement': 0.01},
     'AdjustCa': {'minVal': 6.0, 'maxVal': 13.0, 'dataType': TDF_DATA_TYPE_FLOAT, 'ActionAfterEachTimePeriod': "", 'Calculated': True, 'VariableDependencies': "Ca;Alb"},
@@ -297,6 +297,7 @@ g_LabValueInfo = {
 
     ##############################
     # Future Disease Stages by Boolean
+    'Outcome': {'minVal': 0.0, 'maxVal': 1.0, 'dataType': TDF_DATA_TYPE_BOOL, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': ""},
     'OutcomeImprove': {'minVal': 0.0, 'maxVal': 1.0, 'dataType': TDF_DATA_TYPE_BOOL, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': ""},
     'OutcomeWorsen': {'minVal': 0.0, 'maxVal': 1.0, 'dataType': TDF_DATA_TYPE_BOOL, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': ""},
     'OutcomeFutureEndStage': {'minVal': 0.0, 'maxVal': 1.0, 'dataType': TDF_DATA_TYPE_BOOL, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': ""},

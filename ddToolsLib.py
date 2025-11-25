@@ -43,18 +43,10 @@ import shutil as shutil
 from datetime import datetime
 
 import xml.dom
-import xml.dom.minidom
-from xml.dom.minidom import parseString
-
 import subprocess
 from pathlib import Path
 import psutil
 
-# My own libraries
-import xmlTools as dxml
-import configparser as configparser
-
-#random.seed(3)
 NEWLINE_STR = "\n"
 
 

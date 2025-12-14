@@ -37,7 +37,7 @@ import statistics
 from scipy import stats
 from scipy.stats import spearmanr
 import numpy as np
-import xml.dom
+#import xml.dom
 
 import xmlTools as dxml
 import tdfFile as tdf
@@ -280,7 +280,7 @@ def MLExperiment_GetResultFromAllJobsInDirectoryImpl(dirPathName, srcFileList, r
             continue
         if (fileName.lower().startswith("skip")):
             continue
-        if ((srcFileNameListLen > 0) and (not fileName in srcFileList)):
+        if ((srcFileNameListLen > 0) and (fileName not in srcFileList)):
             continue
 
         srcFilePathName = os.path.join(dirPathName, fileName)
@@ -786,10 +786,7 @@ def GetCoxScoreForAllInputsAndOneOutput(outputName, allSimpleInputsStr, allSimpl
         # Be Careful! Normalize all inputs so the coefficients are comparable.
         # We must assume that the inputs are scaled to be the same, say all are between 0..1 or between 0...100.
         # If we do not do this scaling, then the coefficients will have different scales.
-        numReturnedDataSets, inputArray, resultArray = tdfFile.GetDataForCurrentTimeline(ReqRelationList, 
-                                                                        ReqNameList,
-                                                                        ReqValueList,
-                                                                        False,  # fAddMinibatchDimension,
+        numReturnedDataSets, inputArray, resultArray = tdfFile.GetDataForCurrentTimeline(False,  # fAddMinibatchDimension,
                                                                         False, [])  # Count missing instances
         if (numReturnedDataSets < 1):
             fFoundTimeline = tdfFile.GotoNextTimeline()
@@ -834,8 +831,8 @@ def GetCoxScoreForAllInputsAndOneOutput(outputName, allSimpleInputsStr, allSimpl
         inputsDataFrame = pd.DataFrame(totalInputArray, columns=allSimpleInputsList)
 
         #estimator = CoxPHSurvivalAnalysis()
-        estimator = CoxnetSurvivalAnalysis()
-        estimator.fit(inputsDataFrame, resultNPArray)
+        #estimator = CoxnetSurvivalAnalysis()
+        #estimator.fit(inputsDataFrame, resultNPArray)
 
         # The relative risk exp(β) can be:
         #   >1 (or β>0) for an increased risk of event (death).

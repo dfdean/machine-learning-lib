@@ -45,16 +45,16 @@
 ################################################################################
 import os
 import sys
-import math
-import random
-from os.path import isfile
-import decimal  # For float-to-string workaround
+#import math
+#import random
+#from os.path import isfile
+#import decimal  # For float-to-string workaround
 from datetime import datetime
 import uuid as UUID
 
 import xmlTools as dxml
-import tdfFile as tdf
-import dataShow as DataShow
+#import tdfFile as tdf
+#import dataShow as DataShow
 import medHistogram as MedHistogram
 import groupingFile as GroupingFile
 
@@ -181,7 +181,7 @@ class MedGraphFile():
 
         for _, (startNodeName, rowDict) in enumerate(self.MainDict.items()):
             if (not tvMatrix.FindRowID(startNodeName)):
-                print("MedGraph::CheckState Fail. Cannot find node in tvMatrix. NodeName=" + stopNodeName)
+                print("MedGraph::CheckState Fail. Cannot find node in tvMatrix. NodeName=" + startNodeName)
                 sys.exit(0)
 
             for _, (stopNodeName, covarStr) in enumerate(rowDict.items()):
@@ -330,7 +330,7 @@ class MedGraphFile():
 
         ####################
         # Read the next section start
-        startLine = self.ReadFileSectionStart(fileH)
+        _ = self.ReadFileSectionStart(fileH)
         if (self.CurrentSectionInFile == MEDGRAPH_FILE_SECTION_EDGES):
             self.ReadFileEdgesSection(fileH)
             self.CurrentSectionInFile = MEDGRAPH_FILE_SECTION_NONE
@@ -479,7 +479,7 @@ class MedGraphFile():
             if (len(nodeNamesArray) <= 1):
                 continue
             startNodeName = nodeNamesArray[0].lstrip().rstrip()
-            stopNodeName= nodeNamesArray[1].lstrip().rstrip()
+            stopNodeName = nodeNamesArray[1].lstrip().rstrip()
 
             # Add the value to a new row
             if (startNodeName in self.MainDict):
@@ -531,7 +531,7 @@ class MedGraphFile():
             return
             
         # Go to the start of the header in the src file
-        startSectionLine = self.ReadFileSectionStart(srcFileH)
+        _ = self.ReadFileSectionStart(srcFileH)
         if (self.CurrentSectionInFile != MEDGRAPH_FILE_SECTION_HEADER):
             return
 
@@ -765,7 +765,7 @@ class MedGraphFile():
             # End - for _, (stopNodeName, covar) in enumerate(rowDict.items()):
         # End - for _, (startNodeName, rowDict) in enumerate(self.MainDict.items()):
                 
-        fIntType = False # True
+        fIntType = False  # True
         fDiscardValuesOutOfRange = False
         numBuckets = 15
         histogram = MedHistogram.TDFHistogram()

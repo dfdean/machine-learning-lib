@@ -25,9 +25,9 @@
 #
 #
 ################################################################################
-import sys
-import copy
-from datetime import datetime
+#import sys
+#import copy
+#from datetime import datetime
 
 
 IGNORE_BOUND = "Ignore"
@@ -131,9 +131,9 @@ class CHTMLFileTemplate(object):
                 cellStr = "<td style=\"color:red;\">"
             elif ((redBoundType == GREATER_THAN) and (criteriaVal > boundValueForRed)):
                 cellStr = "<td style=\"color:red;\">"
-
+        
         if (cellStr == ""):
-           cellStr = "<td>"
+            cellStr = "<td>"
 
         return cellStr + str(val) + "</td>"
     # End - MakeColoredTableCellStrEx

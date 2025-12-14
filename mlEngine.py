@@ -35,9 +35,7 @@
 # compute servers.
 #
 ################################################################################
-
 import os
-#import sys
 import math
 import io
 import random
@@ -68,6 +66,7 @@ DEFAULT_PARTITION_SIZE = 20 * (1024 * 1024)
 USE_GPU = False
 
 
+DEBUG_SKIP_PREFLIGHT = True
 DEBUG_CHECK_STATE_ON_SAVE_RESTORE = False
 # This is used for a debugging test, to run a network that takes the desired output as an input.
 DEBUG_HACK_BUGBUG_TEST_IDENTITY_FUNCTION = True
@@ -460,17 +459,19 @@ class MLEngine_SingleLayerNeuralNet(nn.Module):
     def __init__(self, job):
         super().__init__()
 
-        self.ResultDataType = job.GetResultValueType()
+        self.ResultDataType = job.GetNetworkOutputType()
         self.isLogistic = job.GetIsLogisticNetwork()
 
         inputNameListStr = job.GetNetworkInputVarNames()
         inputNameList = inputNameListStr.split(tdf.VARIABLE_LIST_SEPARATOR)
         self.NumInputVars = len(inputNameList)
 
-        resultValueName = job.GetNetworkOutputVarName()
         if (self.isLogistic):
             self.NumOutputCategories = 1
+        elif (self.ResultDataType == tdf.TDF_DATA_TYPE_BOOL):
+            self.NumOutputCategories = 2
         else:
+            resultValueName = job.GetNetworkOutputVarName()
             self.NumOutputCategories = tdf.TDF_GetNumClassesForVariable(resultValueName)
 
         # Create the matrix of weights.
@@ -526,12 +527,12 @@ class MLEngine_SingleLayerNeuralNet(nn.Module):
                 MLEngine_SetLinearUnitChecksum(job, self.inputToOutput, "SimInMatInit")
         # End - if (DEBUG_CHECK_STATE_ON_SAVE_RESTORE):
 
-        # Do not do this. When a n engine starts, the first pass, like when we do preflight,
+        # Do not do this. When an engine starts, the first pass, like when we do preflight,
         # may not change the matrix.
         #else:
-        #   if (MLEngine_LinearUnitChecksumEqual(job, self.inputToOutput, "SimInMatInit", False)):
-        #        #ASSERT_ERROR("Save a matrix checksum that is same as initial")
-        #        pass
+        #if (MLEngine_LinearUnitChecksumEqual(job, self.inputToOutput, "SimInMatInit", False)):
+        #   ASSERT_ERROR("Save a matrix checksum that is same as initial")
+        #   pass
 
         # Now save a checksum of the latest matrix.
         if (DEBUG_CHECK_STATE_ON_SAVE_RESTORE):
@@ -693,7 +694,7 @@ class MLEngine_DeepNeuralNet(nn.Module):
         super().__init__()
         err = E_NO_ERROR
 
-        self.ResultDataType = job.GetResultValueType()
+        self.ResultDataType = job.GetNetworkOutputType()
         self.isLogistic = job.GetIsLogisticNetwork()
         inputNameListStr = job.GetNetworkInputVarNames()
         inputNameList = inputNameListStr.split(tdf.VARIABLE_LIST_SEPARATOR)
@@ -1308,7 +1309,7 @@ class MLEngine_LSTMNeuralNet(nn.Module):
     def __init__(self, job):
         super().__init__()
 
-        self.ResultDataType = job.GetResultValueType()
+        self.ResultDataType = job.GetNetworkOutputType()
         self.isLogistic = job.GetIsLogisticNetwork()
         inputNameListStr = job.GetNetworkInputVarNames()
         inputNameList = inputNameListStr.split(tdf.VARIABLE_LIST_SEPARATOR)
@@ -1618,10 +1619,9 @@ class MLEngine_RNNModel(nn.Module):
     # Initialize the weight matrices
     #####################################################
     def __init__(self, job):
-        err = E_NO_ERROR
         super().__init__()
 
-        self.ResultDataType = job.GetResultValueType()
+        self.ResultDataType = job.GetNetworkOutputType()
         self.isLogistic = job.GetIsLogisticNetwork()
         inputNameListStr = job.GetNetworkInputVarNames()
         inputNameList = inputNameListStr.split(tdf.VARIABLE_LIST_SEPARATOR)
@@ -1635,11 +1635,11 @@ class MLEngine_RNNModel(nn.Module):
         if (layerSpecXML is None):
             raise Exception()
 
-        if (self.isLogistic):
-            # The output is a single number that is the probability.
-            layerOutputSize = 1
-        else:
-            layerOutputSize = self.NumOutputCategories
+        #if (self.isLogistic):
+        #    # The output is a single number that is the probability.
+        #    layerOutputSize = 1
+        #else:
+        #    layerOutputSize = self.NumOutputCategories
 
         # Build the network
         self.NumRecurrentLayers = 1
@@ -1661,13 +1661,15 @@ class MLEngine_RNNModel(nn.Module):
     def forward(self, job, fIsTraining, numDataSamples, inputTensor, trueResultTensor, dayNumArray, 
                 fAddMinibatchDimension, maxDaysWithZeroValue):
         if (False):
+            print("\n\n Gnarly, Dude!")
+            sts.exit(0)
             # Now we shift the tgt by one so with the <SOS> we predict the token at pos 1
-            y_input = trueResultTensor[:, :-1]
-            y_expected = trueResultTensor[:, 1:]
+            #y_input = trueResultTensor[:, :-1]
+            #y_expected = trueResultTensor[:, 1:]
         
             # Get mask to mask out the next words
-            sequence_length = y_input.size(1)
-            #tgt_mask = self.get_tgt_mask(sequence_length)
+            #sequence_length = y_input.size(1)
+            ##tgt_mask = self.get_tgt_mask(sequence_length)
 
             # Embedding + positional encoding - Out size = (batch_size, sequence length, dim_model)
             inputTensor = self.embedding(inputTensor) * math.sqrt(self.dim_model)
@@ -1837,31 +1839,31 @@ def MLEngine_ValidatePredictedResult(testTensor):
 #
 # [MLEngine_MakePyTorchNonLinear]
 #
+# Make the non-linear units between linear layers
+# Depending on the result value type, make a Non-linearity.
+#
+# Tanh is the Hyperbolic Tangent 
+# It is -1 for negative values and 1 for positive values.
+#     Tanh(x)= (exp(x)+exp(−x)) / (exp(x)−exp(−x))
+#
+# Relu is a rectifying linear unit.
+# It is 0 for negative values and the identity function for positive values.
+#    ReLU(x) = max(0,x)
+#
+# Softmax converts a vector of real numbers into a probability distribution
+#     y[i] = e**x[i] / SUM(e**x[j])
+# So, all y[i] add up to 1.
+# Each entry is the ratio of one exponent over the sum of all exponents.
+# The exponentiation operator e**x[i] makes everything non-negative, but it
+# also converts all variable ranges to an exponential progression. So, bigger
+# values become a lot bigger.
+#
 #####################################################
 def MLEngine_MakePyTorchNonLinear(nonLinearTypeStr, fIsLogistic, fIsFinalLayer):
-    # Make the non-linear units between linear layers
-    # Depending on the result value type, make a Non-linearity.
-    #
-    # Tanh is the Hyperbolic Tangent 
-    # It is -1 for negative values and 1 for positive values.
-    #     Tanh(x)= (exp(x)+exp(−x)) / (exp(x)−exp(−x))
-    #
-    # Relu is a rectifying linear unit.
-    # It is 0 for negative values and the identity function for positive values.
-    #    ReLU(x) = max(0,x)
-    #
-    # Softmax converts a vector of real numbers into a probability distribution
-    #     y[i] = e**x[i] / SUM(e**x[j])
-    # So, all y[i] add up to 1.
-    # Each entry is the ratio of one exponent over the sum of all exponents.
-    # The exponentiation operator e**x[i] makes everything non-negative, but it
-    # also converts all variable ranges to an exponential progression. So, bigger
-    # values become a lot bigger.
-    #
     nonLinearTypeStr = nonLinearTypeStr.lower()
     #print("nonLinearTypeStr = " + nonLinearTypeStr)
     if ((fIsLogistic) and (fIsFinalLayer)):
-        newNonLinear = nn.Sigmoid()
+        newNonLinear = torch.nn.Sigmoid()
     elif (nonLinearTypeStr == "tanh"):
         newNonLinear = torch.nn.Tanh()
     elif (nonLinearTypeStr == "relu"):
@@ -1876,7 +1878,7 @@ def MLEngine_MakePyTorchNonLinear(nonLinearTypeStr, fIsLogistic, fIsFinalLayer):
         # This is different than LSTM which output a 3-dimensional tensor
         # so their last dimension is the third, and which is index=2. 
         softMaxDimension = 2
-        newNonLinear = nn.LogSoftmax(dim=softMaxDimension)
+        newNonLinear = torch.nn.LogSoftmax(dim=softMaxDimension)
     elif (nonLinearTypeStr == "sigmoid"):
         newNonLinear = torch.nn.Sigmoid()
     elif (nonLinearTypeStr in ("none", "")):
@@ -1914,9 +1916,6 @@ def MLEngine_NormalizeInputs(job, numDataSets, inputArray, fAddMinibatchDimensio
             inputVec = inputArray[sampleNum][0]
         else:
             inputVec = inputArray[sampleNum]
-
-        #print("MLEngine_NormalizeInputs")
-        #print("    inputVec=" + str(inputVec))
 
         # Fast path, copy the whole vector without change.
         if (fAddMinibatchDimension):
@@ -2256,6 +2255,65 @@ def MLEngine_MakeListOfResults(job, predictedResultTensor, numDataSamples, netwo
 
 
 
+
+################################################################################
+# 
+# [MLEngine_DivideTimelineIntoSections]
+#
+# This returns:
+#       sectionInfoList - A list of dicts, each dict describes one section in the timeline.
+#       Sections are con tinuous runs that meet the criteria values.
+################################################################################
+def MLEngine_DivideTimelineIntoSections(job, numReturnedDataSets, dayNumArray, criteriaValueArray):
+    sectionInfoList = []
+
+    fFoundIt, varName, relationID, value1, value2 = job.GetInputCriteriaInfo()
+    if (not fFoundIt):
+        currentSection = {"firstIndex": 0, "lastIndex": numReturnedDataSets - 1}
+        sectionInfoList.append(currentSection)
+        return sectionInfoList
+
+    currentSection = None
+    for index in range(numReturnedDataSets):
+        criteriaVal = criteriaValueArray[index]
+        fMatchCriteria = False
+        if (((relationID == tdf.VALUE_RELATION_IN_RANGE_ID) and (criteriaVal >= value1) and (criteriaVal <= value2))
+            or ((relationID == tdf.VALUE_RELATION_EQUAL_ID) and (criteriaVal == value1))
+            or ((relationID == tdf.VALUE_RELATION_GREATER_THAN_ID) and (criteriaVal > value1))
+            or ((relationID == tdf.VALUE_RELATION_GREATER_THAN_EQUAL_ID) and (criteriaVal >= value1))
+            or ((relationID ==tdf. VALUE_RELATION_LESS_THAN_ID) and (criteriaVal < value1))
+            or ((relationID == tdf.VALUE_RELATION_LESS_THAN_EQUAL_ID) and (criteriaVal <= value1))):
+            fMatchCriteria = True
+
+        if (fMatchCriteria):
+            if (currentSection is None):
+                currentSection = {'firstIndex': index, 'lastIndex': index }
+            else:
+                currentSection['lastIndex'] = index
+        # End - if (fMatchCriteria)
+        else:
+            if (currentSection is not None):
+                sectionInfoList.append(currentSection)
+                currentSection = None
+        # End - if (not fMatchCriteria)
+    # End - for index in range(numReturnedDataSets):
+
+    # Add any section we were working on when we hit the end.
+    if (currentSection is not None):
+        sectionInfoList.append(currentSection)
+
+    return sectionInfoList
+# End - MLEngine_DivideTimelineIntoSections
+
+
+
+
+
+
+
+
+
+
 ################################################################################
 # 
 # [MLEngine_PreflightOneFilePartitionImpl]
@@ -2272,22 +2330,17 @@ def MLEngine_PreflightOneFilePartitionImpl(job, currentPartitionStart, currentPa
     tdfFilePathName = job.GetDataParam("TrainData", "")
     inputNameListStr = job.GetNetworkInputVarNames()
     resultValueName = job.GetNetworkOutputVarName()
-    _, requirePropertyRelationList, requirePropertyNameList, requirePropertyValueList = job.GetFilterProperties()
+    criteriaVarNameList = job.GetInputCriteriaVarList()
     
     preflightNumMissingInputsList = job.GetPreflightNumMissingInputs()
 
     # Open the file in the worker process address space
     tdfReader = tdf.TDF_CreateTDFFileReader(tdfFilePathName, inputNameListStr, resultValueName, 
-                                            requirePropertyNameList)
+                                            criteriaVarNameList)
 
     # On Preflight, we will build the list of timeline positions. Initialize this.
     timelinePositionList = []
     # Make a list of timelines in this file partition and group them by training priority.
-    # We go through the classes in round robin, so first train a timeline with priority 0, then
-    # a timeline in priority 1, and so on, until we reach the end and then go back to the beginning.
-    # We iterate only while we can find one timeline from each or most priorities.
-    # We may not train all timelines from the lowest priorities, because we do not want that to
-    # overshadow the higher priorities. So, may not train all items from the more common classes.
     numTrainingPriorities = job.GetNumTrainingPriorities()
     # Warning! Dont use [ [] ] * TimelinesForTrainingPriority
     # That makes a list containing the same sublist object numTrainingPriorities times
@@ -2318,10 +2371,7 @@ def MLEngine_PreflightOneFilePartitionImpl(job, currentPartitionStart, currentPa
             stopPosLastTimelineInPartition = stopTimelinePosInFile
 
         # Get a sequence of all data points for the current timeline. 
-        numReturnedDataSets, inputArray, resultArray, dayNumArray = tdfReader.GetDataForCurrentTimeline(requirePropertyRelationList,
-                                                                requirePropertyNameList,
-                                                                requirePropertyValueList,
-                                                                False,  # fAddMinibatchDimension
+        numReturnedDataSets, inputArray, resultArray, dayNumArray, criteriaValueArray = tdfReader.GetDataForCurrentTimeline(False,  # fAddMinibatchDimension
                                                                 False,  # NeedTrueResultForEveryInput
                                                                 preflightNumMissingInputsList)  # Count missing instances
 
@@ -2330,37 +2380,11 @@ def MLEngine_PreflightOneFilePartitionImpl(job, currentPartitionStart, currentPa
             for sampleNum in range(numSamples):
                 job.PreflightData(inputArray[sampleNum], resultArray[sampleNum].item())
             # End - for sampleNum in range(numSamples):
-
-            # This is tricky - a single timeline may have several different classes of result.
-            # We consider the timeline to be in its most rare class.
-            # The most rare class is class 0, and class 1 is second most rare class and so on.
-            trainingPriority = -1
-            for sampleNum in range(numSamples):
-                currentResult = resultArray[sampleNum].item()
-                # Be careful, results may sometimes be invalid if we are processing a
-                # sequence. There may not be a result for every intermediate step, only
-                # the last step.
-                if (currentResult != tdf.TDF_INVALID_VALUE):
-                    currentPriority = job.GetTrainingPriority(currentResult)
-                    if ((trainingPriority < 0) or (currentPriority < trainingPriority)):
-                        trainingPriority = currentPriority
-                # End - if (currentResult != tdf.TDF_INVALID_VALUE):
-            # End - for sampleNum in range(numSamples):
-
-            if (trainingPriority >= 0):
-                timelineInfoDict = {"a": startTimelinePosInFile, "b": stopTimelinePosInFile}
-                TimelinesForTrainingPriority[trainingPriority].append(timelineInfoDict)
-                timelinePositionList.append(timelineInfoDict)
-            # if (trainingPriority >= 0):
         # End - if (numReturnedDataSets >= 1)
 
         # Go to the next timeline
-        startTimelinePosInFile = -1
-        stopTimelinePosInFile = -1
-        fFoundTimeline, fEOF, startTimelinePosInFile, stopTimelinePosInFile = tdfReader.GotoNextTimelineInPartition(startTimelinePosInFile, 
-                                                                                                        stopTimelinePosInFile, 
-                                                                                                        currentPartitionStop,
-                                                                                                        False)  # fOnlyFindTimelineBoundaries
+        fFoundTimeline, fEOF, startTimelinePosInFile, stopTimelinePosInFile = tdfReader.GotoNextTimelineInPartition(-1, -1, 
+                                                                                currentPartitionStop, False)  # fOnlyFindTimelineBoundaries
     # End - while ((not fEOF) and (fFoundTimeline)):
 
  
@@ -2368,7 +2392,7 @@ def MLEngine_PreflightOneFilePartitionImpl(job, currentPartitionStart, currentPa
 
     job.SetPreflightNumMissingInputs(preflightNumMissingInputsList)
 
-    return job, fEOF, startPosFirstTimelineInPartition, stopPosLastTimelineInPartition, timelinePositionList, TimelinesForTrainingPriority
+    return job, stopPosLastTimelineInPartition, timelinePositionList, TimelinesForTrainingPriority
 # End - MLEngine_PreflightOneFilePartitionImpl
 
 
@@ -2378,7 +2402,7 @@ def MLEngine_PreflightOneFilePartitionImpl(job, currentPartitionStart, currentPa
 
 ################################################################################
 #
-# [MLEngine_TrainOneFilePartitionImpl]
+# [MLEngine_ProcessOneFilePartitionImpl]
 #
 # This returns several results:
 #   job
@@ -2388,18 +2412,37 @@ def MLEngine_PreflightOneFilePartitionImpl(job, currentPartitionStart, currentPa
 #   fEOF - True iff we hit the end of the file
 #
 ################################################################################
-def MLEngine_TrainOneFilePartitionImpl(job, currentPartitionStart, currentPartitionStop, 
-                                       localNeuralNet, localLossFunction, localOptimizer, 
-                                       cudaIsAvailable, gpuDevice, TimelinesForTrainingPriority):
-    tdfFilePathName = job.GetDataParam("TrainData", "")
+def MLEngine_ProcessOneFilePartitionImpl(fIsTraining, job, 
+                                        currentPartitionStart, currentPartitionStop, 
+                                        localNeuralNet, localLossFunction, localOptimizer, 
+                                        cudaIsAvailable, gpuDevice, TimelinesForTrainingPriority):
+    fEOF = False
+    numDataPointsProcessed = 0
+
     inputNameListStr = job.GetNetworkInputVarNames()
     resultValueName = job.GetNetworkOutputVarName()
-    _, requirePropertyRelationList, requirePropertyNameList, requirePropertyValueList = job.GetFilterProperties()
+    if ((inputNameListStr == "") or (resultValueName == "")):
+        ASSERT_ERROR("MLEngine_ProcessOneFilePartitionImpl - Error from Params")
+
+    criteriaVarNameList = job.GetInputCriteriaVarList()
+    fFoundIt, outputSourceID, resultVarName, relationID, value1, value2, whenTimeID = job.GetNetworkOutputInfo()
+    if (not fFoundIt):
+        ASSERT_ERROR("MLEngine_ProcessOneFilePartitionImpl - Error from GetNetworkOutputInfo")
+
+    if (fIsTraining):
+        tdfFilePathName = job.GetDataParam("TrainData", "")
+    else:
+        tdfFilePathName = job.GetDataParam("TestData", "")
+        networkOutputDataType = job.GetNetworkOutputType()
 
     # Open the file in the worker process address space
     tdfReader = tdf.TDF_CreateTDFFileReader(tdfFilePathName, inputNameListStr, resultValueName, 
-                                            requirePropertyNameList)
+                                            criteriaVarNameList)
+    if (tdfReader is None):
+        ASSERT_ERROR("MLEngine_ProcessOneFilePartitionImpl - Error from TDF_CreateTDFFileReader")
+
     maxDaysWithZeroValue = tdfReader.GetMaxDaysWithZeroValue()
+    numInputValues = tdfReader.GetNumInputValues()
 
     # Get some properties that are used for each training.
     lossTypeStr = job.GetTrainingParamStr(mlJob.TRAINING_OPTION_LOSS_FUNCTION_ELEMENT_NAME, "").lower()
@@ -2410,136 +2453,133 @@ def MLEngine_TrainOneFilePartitionImpl(job, currentPartitionStart, currentPartit
     #   XGBoost wants data in the form: (NumSamples x NumFeatures)
     fAddMinibatchDimension = True
  
-    # Compute the list lengths. These are the lists of timelines for each resault priority.
-    # Also, randomize the order of each of the timeline lists
-    numTrainingPriorities = job.GetNumTrainingPriorities()
-    NumTimelinesAtEachPriority = [0] * numTrainingPriorities
-    maxNumPtsAtAnyPriority = 0
-    for index in range(numTrainingPriorities):
-        timelineList = TimelinesForTrainingPriority[index]
-
-        # Count
-        numTimelinesAtCurrentPriority = len(timelineList)
-        NumTimelinesAtEachPriority[index] = numTimelinesAtCurrentPriority
-        if (numTimelinesAtCurrentPriority >= maxNumPtsAtAnyPriority):
-            maxNumPtsAtAnyPriority = numTimelinesAtCurrentPriority
-
-        # Randomize
-        random.shuffle(timelineList)
-        TimelinesForTrainingPriority[index] = timelineList
-    # End - for index in range(numTrainingPriorities):
-
-    # Now, train one timeline from each level of data priority.
-    # The more rare results are higher priority which is a lower index.
-    # So, priority 0 is the highest priority and most rare.
-    numTimelinesProcessed = 0
-    numDataPointsProcessed = 0
-    for timelineIndexAtEachPriority in range(maxNumPtsAtAnyPriority):
-        numPrioritiesProcessed = 0
-        for priorityLevel in range(numTrainingPriorities):
-            ptList = TimelinesForTrainingPriority[priorityLevel]
-            if (timelineIndexAtEachPriority < NumTimelinesAtEachPriority[priorityLevel]):                
-                timelineInfo = ptList[timelineIndexAtEachPriority]
-                numPrioritiesProcessed += 1
-
-                tdfReader.GotoNextTimelineInPartition(timelineInfo["a"], timelineInfo["b"], -1, False)
-                numReturnedDataSets, inputArray, resultArray, dayNumArray = tdfReader.GetDataForCurrentTimeline(requirePropertyRelationList,
-                                                                                    requirePropertyNameList,
-                                                                                    requirePropertyValueList,
-                                                                                    fAddMinibatchDimension,
-                                                                                    fEveryInputMakesPrediction,
-                                                                                    None)
-                if (numReturnedDataSets >= 1):
-                    localNeuralNet.CheckState(job)
-                    MLEngine_TrainGroupOfDataPoints(job, localNeuralNet, localLossFunction, localOptimizer, 
-                                                    lossTypeStr, cudaIsAvailable, gpuDevice,
-                                                    inputArray, resultArray, dayNumArray,
-                                                    numReturnedDataSets, fAddMinibatchDimension, 
-                                                    maxDaysWithZeroValue)
-                    localNeuralNet.CheckState(job)
-
-                    numTimelinesProcessed += 1
-                    numDataPointsProcessed += numReturnedDataSets
-                # if (numReturnedDataSets >= 1):
-            # End - if (timelineIndexAtEachPriority < NumTimelinesAtEachPriority[priorityLevel]):
-        # End - for priorityLevel in range(numTrainingPriorities):
-
-        # Stop processing when one of several conditions are met
-        #    Only the most common timeline is left
-        #    There are no timelines left
-        if (numPrioritiesProcessed <= 1):
-            break
-    # End - for timelineIndexAtEachPriority in range(maxNumPtsAtAnyPriority):
-
-    tdfReader.Shutdown()
-    localNeuralNet.CheckState(job)
-
-    return job, numTimelinesProcessed, numDataPointsProcessed
-# End - MLEngine_TrainOneFilePartitionImpl
-
-
-
-
-
-
-
-################################################################################
-#
-# [MLEngine_TestOneFilePartitionImpl]
-#
-# This returns one value: fEOF
-#   fEOF - True iff we hit the end of the file
-#
-################################################################################
-def MLEngine_TestOneFilePartitionImpl(job, currentPartitionStart, currentPartitionStop, 
-                                      localNeuralNet, cudaIsAvailable, gpuDevice):
-    tdfFilePathName = job.GetDataParam("TestData", "")
-    inputNameListStr = job.GetNetworkInputVarNames()
-    resultValueName = job.GetNetworkOutputVarName()
-    _, requirePropertyRelationList, requirePropertyNameList, requirePropertyValueList = job.GetFilterProperties()
-    networkOutputDataType = job.GetResultValueType()
-
-    # Pytorch wants data (NumSamples x NumBatches x NumFeatures)
-    # while XGBoost wants data (NumSamples x NumFeatures)
-    fAddMinibatchDimension = True
-
-    fEveryInputMakesPrediction = localNeuralNet.NeedTrueResultForEveryInput()
-
-    # Open the file in the worker address space
-    tdfReader = tdf.TDF_CreateTDFFileReader(tdfFilePathName, inputNameListStr, resultValueName, 
-                                            requirePropertyNameList)
-    maxDaysWithZeroValue = tdfReader.GetMaxDaysWithZeroValue()
-
     #######################################
     # This loop looks at each timeline in the current partition
-    # Unlike training, the order does not matter. The arrays are not changing
-    # and We compute the accuracy for every timeline, no matter the order.
     numTimelinesProcessed = 0
     fFoundTimeline, fEOF, _, _ = tdfReader.GotoFirstTimelineInPartition(-1, -1, currentPartitionStart, currentPartitionStop, False)
     while ((not fEOF) and (fFoundTimeline)):
         # Get all data points for a single timeline. 
-        numReturnedDataSets, inputArray, resultArray, dayNumArray = tdfReader.GetDataForCurrentTimeline(requirePropertyRelationList,
-                                                                            requirePropertyNameList,
-                                                                            requirePropertyValueList,
-                                                                            fAddMinibatchDimension,
-                                                                            fEveryInputMakesPrediction,
-                                                                            None)
-        if (numReturnedDataSets >= 1):
-            MLEngine_TestGroupOfDataPoints(job, localNeuralNet, cudaIsAvailable, gpuDevice,
-                                           inputArray, resultArray, dayNumArray,
-                                           numReturnedDataSets, fAddMinibatchDimension, 
-                                           networkOutputDataType, maxDaysWithZeroValue)
-        # End - if (numReturnedDataSets >= 1):
+        numReturnedDataSets, inputArray, resultArray, dayNumArray, criteriaValueArray = tdfReader.GetDataForCurrentTimeline(fAddMinibatchDimension,
+                                                                                fEveryInputMakesPrediction, None)
+        numTimelinesProcessed += 1
+        if (numReturnedDataSets < 1):
+            # Go to the next timeline in this partition
+            fFoundTimeline, fEOF, _, _ = tdfReader.GotoNextTimelineInPartition(-1, -1, currentPartitionStop, False)
+            continue
+
+        sectionInfoList = MLEngine_DivideTimelineIntoSections(job, numReturnedDataSets, dayNumArray, criteriaValueArray)
+        fOnlyOneSection = len(sectionInfoList) == 1
+        for currentSection in sectionInfoList:
+            firstIndex = currentSection['firstIndex']
+            lastIndex = currentSection['lastIndex']
+            resultForWholeSequence = tdf.TDF_INVALID_VALUE
+
+            # Check if there is a single result that applies to the entire sequence
+            if (tdf.VALUE_WHEN_AT_SEQUENCE_END_ID == whenTimeID):
+                lastDay = dayNumArray[lastIndex]
+                if (mlJob.NETWORK_OUTPUT_SOURCE_VALUE_ID == outputSourceID):
+                    resultForWholeSequence, _, _ = tdfReader.GetResultValue(firstIndex, lastDay, resultVarName, tdf.VALUE_WHEN_AT_DAY_ID)
+                else: 
+                    resultForWholeSequence, _, _ = tdfReader.CalculateTestResultValues(firstIndex, lastDay, resultVarName, 
+                                                                            relationID, value1, value2, tdf.VALUE_WHEN_AT_DAY_ID)
+            elif (tdf.VALUE_WHEN_AFTER_SEQUENCE_END_ID == whenTimeID):
+                lastDay = dayNumArray[lastIndex]
+                if (mlJob.NETWORK_OUTPUT_SOURCE_VALUE_ID == outputSourceID):
+                    resultForWholeSequence, resultDay, _ = tdfReader.GetResultValue(firstIndex, lastDay, resultVarName, tdf.VALUE_WHEN_AFTER_DAY_ID)
+                else: 
+                    resultForWholeSequence, resultDay, _ = tdfReader.CalculateTestResultValues(firstIndex, lastDay, resultVarName, 
+                                                                                        relationID, value1, value2, tdf.VALUE_WHEN_AFTER_DAY_ID)
+                # Sometimes, there is no result *after* the sequence, only on the last day of the sequence.
+                # In that case, shorten the sequence so the result is after hte sequence.
+                if (resultDay <= lastDay):
+                    while (lastIndex >= 0):
+                        if (resultDay > dayNumArray[lastIndex]):
+                            lastDay = dayNumArray[lastIndex]
+                            break
+                        lastIndex = lastIndex - 1
+                    # End - while (lastIndex >= 0):
+                # End - if (resultDay <= lastDay):
+            # End - elif (tdf.VALUE_WHEN_AFTER_SEQUENCE_END_ID == whenTimeID)
+
+
+            # Compute the results.
+            # This is where the real work is done - not when the data is first retrieved from the file.
+            # A result value depends on the subtimeline. For example, it may be the first result *after*
+            # the end of a sub-sequence, not the result at the end in the subsequence or the end of the timeline.
+            # In fact, in the case of "ever", a result value may appear outside the subsequence.
+            # We still get results earlier, because that allows us to decide which results are rare or common
+            # and that can be used to prioritize training.
+            hintIndex = firstIndex
+            for currentIndex in range(firstIndex, lastIndex):
+                dayNum = dayNumArray[currentIndex]
+
+                if (outputSourceID == mlJob.NETWORK_OUTPUT_SOURCE_VALUE_ID):
+                    if (whenTimeID in [tdf.VALUE_WHEN_AT_DAY_ID, tdf.VALUE_WHEN_AFTER_DAY_ID]):
+                        newResult, resultDay, hintIndex = tdfReader.GetResultValue(hintIndex, dayNum, resultVarName, whenTimeID)
+                        resultArray[currentIndex] = newResult
+                    else:
+                        resultArray[currentIndex] = resultForWholeSequence
+                elif (outputSourceID in [mlJob.NETWORK_OUTPUT_SOURCE_TEST_LOGISTIC_ID, mlJob.NETWORK_OUTPUT_SOURCE_TEST_CATEGORY_ID]):
+                    newResult = -1
+                    if (whenTimeID in [tdf.VALUE_WHEN_AT_DAY_ID, tdf.VALUE_WHEN_AFTER_DAY_ID]):
+                        newResult, resultDay, hintIndex = tdfReader.CalculateTestResultValues(hintIndex, dayNum, resultVarName, 
+                                                                                              relationID, value1, value2, whenTimeID)
+                    else:
+                        newResult = resultForWholeSequence
+                    # If it is just logistic, then store the results. 
+                    if (outputSourceID == mlJob.NETWORK_OUTPUT_SOURCE_TEST_LOGISTIC_ID):
+                        resultArray[currentIndex] = newResult
+                    else:   # if (outputSourceID == mlJob.NETWORK_OUTPUT_SOURCE_TEST_CATEGORY_ID):
+                        # <><> FIX ME. This needs to place two separate values: either 0,1 or 1,0
+                        resultArray[currentIndex] = newResult
+            # End - for currentIndex in range(firstIndex, lastIndex):
+
+            if (fOnlyOneSection):
+                currentSectionInputArray = inputArray
+                currentSectionResultArray = resultArray
+                currentSectionDayNumArray = dayNumArray
+            elif (fAddMinibatchDimension):
+                currentSectionInputArray = inputArray[firstIndex:lastIndex, :1, :numInputValues]
+                currentSectionResultArray = resultArray[firstIndex:lastIndex, :1:1]
+                currentSectionDayNumArray = dayNumArray[firstIndex:lastIndex]
+            else:
+                currentSectionInputArray = inputArray[firstIndex:lastIndex, :numInputValues]
+                currentSectionResultArray = resultArray[firstIndex:lastIndex, :1]
+                currentSectionDayNumArray = dayNumArray[firstIndex:lastIndex]
+            numReturnedDataSets = (lastIndex - firstIndex) + 1
+
+            localNeuralNet.CheckState(job)
+            if (fIsTraining):
+                MLEngine_TrainGroupOfDataPoints(job, localNeuralNet, localLossFunction, localOptimizer, 
+                                                lossTypeStr, cudaIsAvailable, gpuDevice,
+                                                currentSectionInputArray, currentSectionResultArray, currentSectionDayNumArray,
+                                                numReturnedDataSets, fAddMinibatchDimension, 
+                                                maxDaysWithZeroValue)
+            else:
+                MLEngine_TestGroupOfDataPoints(job, localNeuralNet, cudaIsAvailable, gpuDevice,
+                                               currentSectionInputArray, currentSectionResultArray, currentSectionDayNumArray,
+                                               numReturnedDataSets, fAddMinibatchDimension, 
+                                               networkOutputDataType, maxDaysWithZeroValue)
+
+
+
+            localNeuralNet.CheckState(job)
+
+            numDataPointsProcessed += numReturnedDataSets
+        # End - for currentSection in sectionInfoList:
+
 
         # Go to the next timeline in this partition
-        numTimelinesProcessed += 1
         fFoundTimeline, fEOF, _, _ = tdfReader.GotoNextTimelineInPartition(-1, -1, currentPartitionStop, False)
     # End - while ((not fEOF) and (fFoundTimeline)):
 
-    tdfReader.Shutdown()
 
-    return job, numTimelinesProcessed, fEOF
-# End - MLEngine_TestOneFilePartitionImpl
+    tdfReader.Shutdown()
+    localNeuralNet.CheckState(job)
+
+    return job, numTimelinesProcessed, numDataPointsProcessed, fEOF
+# End - MLEngine_ProcessOneFilePartitionImpl
+
 
 
 
@@ -2603,8 +2643,6 @@ def MLEngine_CreateNeuralNetFromJobSpec(job):
 ################################################################################
 def MLEngine_CreateLossFunctionForJob(job):
     lossTypeStr = job.GetTrainingParamStr(mlJob.TRAINING_OPTION_LOSS_FUNCTION_ELEMENT_NAME, "").lower()
-    #print("lossTypeStr=" + lossTypeStr)
-
     if (lossTypeStr == "l1loss"):
         localLossFunction = nn.L1Loss()
         lossDimension = 2
@@ -2673,8 +2711,8 @@ def MLEngine_ReturnResultsFromChildProcess(sendPipeEnd, job, numTimelinesProcess
 # as a parameter string, modified, then returned as a result string.
 ################################################################################
 def MLEngine_TrainOneFilePartitionInChildProcess(sendPipeEnd, jobStr,
-                                            currentPartitionStart, currentPartitionStop,
-                                            TimelinesForTrainingPriorityStr):
+                                                currentPartitionStart, currentPartitionStop,
+                                                TimelinesForTrainingPriorityStr):
     global g_ChildProcessPipe
     g_ChildProcessPipe = sendPipeEnd
     totalSkippedTimelines = 0
@@ -2684,9 +2722,6 @@ def MLEngine_TrainOneFilePartitionInChildProcess(sendPipeEnd, jobStr,
 
     # Regenerate the runtime job object from its serialized string form. 
     job = mlJob.MLJob_CreateMLJobFromString(jobStr)
-
-    # Convert other strings passed accross address spaces to a runtime data structure.
-    TimelinesForTrainingPriority = json.loads(TimelinesForTrainingPriorityStr)
 
     # Create the neural network in this address space.
     localNeuralNet = MLEngine_CreateNeuralNetFromJobSpec(job)
@@ -2763,7 +2798,8 @@ def MLEngine_TrainOneFilePartitionInChildProcess(sendPipeEnd, jobStr,
 
 
     # Do the actual work. 
-    job, numTimelinesProcessed, numDataPointsProcessed = MLEngine_TrainOneFilePartitionImpl(job, 
+    TimelinesForTrainingPriority = []
+    job, numTimelinesProcessed, numDataPointsProcessed, fEOF = MLEngine_ProcessOneFilePartitionImpl(True, job, 
                                                                     currentPartitionStart, currentPartitionStop,
                                                                     localNeuralNet, localLossFunction, localOptimizer,
                                                                     cudaIsAvailable, gpuDevice, 
@@ -2852,9 +2888,10 @@ def MLEngine_TestOneFilePartitionInChildProcess(sendPipeEnd, jobStr, currentPart
         localNeuralNet = localNeuralNet.to(gpuDevice)
 
     # Do the actual work
-    job, numTimelinesProcessed, fEOF = MLEngine_TestOneFilePartitionImpl(job, currentPartitionStart, 
-                                                                        currentPartitionStop, localNeuralNet,
-                                                                        cudaIsAvailable, gpuDevice)
+    job, numTimelinesProcessed, numDataPointsProcessed, fEOF = MLEngine_ProcessOneFilePartitionImpl(False, job, 
+                                                                        currentPartitionStart, currentPartitionStop,
+                                                                        localNeuralNet, None, None,
+                                                                        cudaIsAvailable, gpuDevice, [])
 
     MLEngine_ReturnResultsFromChildProcess(sendPipeEnd, job, numTimelinesProcessed, 0, 0, fEOF, -1, -1, E_NO_ERROR, "")
 
@@ -2895,7 +2932,7 @@ def MLEngine_PreflightNeuralNet(job, partitionSize):
             partitionInfo['stop'] = nextPartitionStartPosition + partitionSize
 
         # This will overwrite timelinePositionList.
-        job, _, _, stopPosLastTimeline, timelinePositionList, TimelinesForTrainingPriority = MLEngine_PreflightOneFilePartitionImpl(job, partitionInfo['start'], partitionInfo['stop'])
+        job, stopPosLastTimeline, timelinePositionList, TimelinesForTrainingPriority = MLEngine_PreflightOneFilePartitionImpl(job, partitionInfo['start'], partitionInfo['stop'])
 
         # We build up a list of timeline positions during preflight.
         # We reuse this list on all training epochs to quickly load timelines.
@@ -2938,7 +2975,11 @@ def MLEngine_TrainNeuralNet(job, partitionSize):
     # Initially, this dictionary is in order, so the nth entry in the dictionary is
     # the nth partition, and adjacent entries are adjacent in the file. We will first go
     # through the file in this sequence, but may shuffle it on later epochs.
-    job, partitionList = MLEngine_PreflightNeuralNet(job, partitionSize)
+    if (DEBUG_SKIP_PREFLIGHT):
+        trivialPartition = {'start': 0, 'stop': 21011631, 'ptPriorityListStr': ""}
+        partitionList = [ trivialPartition ]
+    else:
+        job, partitionList = MLEngine_PreflightNeuralNet(job, partitionSize)
 
     print("=================\nTraining:")
     job.StartTraining()

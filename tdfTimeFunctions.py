@@ -1262,7 +1262,7 @@ class CVolatilityValue():
         if (self.TimeGranularity == tdf.TDF_TIME_GRANULARITY_DAYS):
             timeCode = timeInDays
         else:                
-            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMin, timeSeconds)
+            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMinutes, timeSeconds)
 
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.

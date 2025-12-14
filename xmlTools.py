@@ -28,12 +28,11 @@
 # job files. This encapsulates all XML dependencies, so if we change the XML library,
 # ideally only this module needs to be changed.
 ################################################################################
-import copy
-
+#import copy
 import xml.dom
 import xml.dom.minidom
-from xml.dom.minidom import parseString
-from xml.dom.minidom import getDOMImplementation
+#from xml.dom.minidom import parseString
+#from xml.dom.minidom import getDOMImplementation
 
 
 ################################################################################
@@ -467,9 +466,7 @@ def XMLTools_GetChildNodeTextAsStr(parentNode, childName, defaultStr):
     if (childNode is None):
         return defaultStr
 
-    textStr = XMLTools_GetTextContents(childNode)
-    textStr = textStr.lstrip().rstrip()
-
+    textStr = XMLTools_GetTextContents(childNode).lstrip().rstrip()
     return textStr
 # XMLTools_GetChildNodeTextAsStr
 
@@ -548,9 +545,9 @@ def XMLTools_GetChildNodeTextAsBool(parentNode, childName, defaultVal):
     textStr = textStr.lower().lstrip().rstrip()
 
     # We don't know what default is, so explicitly test for True and False.
-    if (textStr in ("true", "1", "yes")):
+    if (textStr in ("true", "on", "1", "yes")):
         return True
-    if (textStr in ("false", "0", "no")):
+    if (textStr in ("false", "off", "0", "no")):
         return False
 
     return defaultVal

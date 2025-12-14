@@ -276,6 +276,21 @@ TDF_DATA_TYPE_UNKNOWN               = -1
 TDF_TIME_GRANULARITY_DAYS       = 0
 TDF_TIME_GRANULARITY_SECONDS    = 1
 
+# Relations - these are used to describe a test relation
+VALUE_RELATION_IN_RANGE_ID = 1
+VALUE_RELATION_EQUAL_ID = 2
+VALUE_RELATION_GREATER_THAN_ID = 3
+VALUE_RELATION_GREATER_THAN_EQUAL_ID = 4
+VALUE_RELATION_LESS_THAN_ID = 5
+VALUE_RELATION_LESS_THAN_EQUAL_ID = 6
+
+# When values - these specify when a condition must be met
+VALUE_WHEN_AT_DAY_ID = 1
+VALUE_WHEN_AFTER_DAY_ID = 2
+VALUE_WHEN_AT_SEQUENCE_END_ID = 3
+VALUE_WHEN_AFTER_SEQUENCE_END_ID = 4
+VALUE_WHEN_EVER_ID = 5
+
 # WARNING! These are also defined in tdfMedicineValues.py
 # We really need a public include file with just these values.
 # Until then, any change here must be duplicated in tdfMedicineValues.py
@@ -820,7 +835,7 @@ class TDFFileWriter():
         valueStr = valueStr.replace('<', '')
 
         if ((name == "") or (valueStr == "")):
-            print("Error. AppendNameValuePairToStr discarding empty name str. name=" + name + ", valueStr=" + valueStr )
+            print("Error. AppendNameValuePairToStr discarding empty name str. name=" + name + ", valueStr=" + valueStr)
             return totalStr    
 
         try:
@@ -974,7 +989,6 @@ class TDFFileReader():
         self.baselineCrSeries = None
         self.varIndexThatMustBeNonZero = -1
         self.maxZeroDays = -1
-        self.DaysSincePrevResultIndex = -1
 
         ###################
         self.ParseVariableList(inputNameListStr, resultValueName, requirePropertyNameList)
@@ -1097,19 +1111,19 @@ class TDFFileReader():
         self.TimeGranularity = fValue
 
 
+
     #####################################################
     #
     # [TDFFileReader::ParseVariableList]
     #
     #####################################################
     def ParseVariableList(self, inputNameListStr, resultValueName, requirePropertyNameList):
-        self.DaysSincePrevResultIndex = -1
-
         # Get information about the requested variables. Each variable may be a simple value, 
         # like "Cr", or a value at an offset, like "Cr[-1]" or a function like Cr.rate
         # Note, one name may appear several times in the list, but have different functions
         # or offsets.
         self.allValueVarNameList = inputNameListStr.split(VARIABLE_LIST_SEPARATOR)
+        self.requirePropertyNameList = requirePropertyNameList
 
         # Before we expand the list, count how many vars we return to teh client.
         self.numInputValues = len(self.allValueVarNameList)
@@ -1137,9 +1151,9 @@ class TDFFileReader():
         # ------------------------------------------------------
         if (self.resultValueName != ""):
             self.allValueVarNameList.append(self.resultValueName)
-        if (requirePropertyNameList is not None):
-            for _, nameStr in enumerate(requirePropertyNameList):
-                self.allValueVarNameList.append(nameStr)
+        for requirePropertyName in requirePropertyNameList:
+            if (requirePropertyName != ""):
+                self.allValueVarNameList.append(requirePropertyName)
 
         # Parse the initial list of variables needed.
         # This may not be all; once we closely look at the variables, we may
@@ -1161,10 +1175,6 @@ class TDFFileReader():
             self.AllValuesOffsetStopRange[valueIndex] = valueStopOffsetRange
             self.AllValuesOffsetRangeOption[valueIndex] = valueRangeOption
             self.allValuesFunctionNameList[valueIndex] = functionName
-
-            if (valueName == "DaysSincePrev"):
-                self.DaysSincePrevResultIndex = valueIndex
-            # End - if (valueName == "DaysSincePrev"):
         # End - for valueIndex, valueName in enumerate(inputValueNameList):
 
         # Use the variable name stem (found by parsing the full variable names) 
@@ -1435,8 +1445,6 @@ class TDFFileReader():
 
 
 
-
-
     #####################################################
     # [TDFFileReader::GetXMLNodeForCurrentTimeline]
     #####################################################
@@ -1658,10 +1666,8 @@ class TDFFileReader():
         self.fileHandle.seek(startPartition, 0)
 
         # Now, go to the first timeline
-        fFoundTimeline, fEOF, startTimelinePosInFile, stopTimelinePosInFile = self.GotoNextTimelineInPartition(TDF_INVALID_VALUE, 
-                                                                                TDF_INVALID_VALUE,
-                                                                                stopPartition,
-                                                                                fOnlyFindTimelineBoundaries)
+        fFoundTimeline, fEOF, startTimelinePosInFile, stopTimelinePosInFile = self.GotoNextTimelineInPartition(-1, -1, 
+                                                                                stopPartition, fOnlyFindTimelineBoundaries)
 
         return fFoundTimeline, fEOF, startTimelinePosInFile, stopTimelinePosInFile
     # End - GotoFirstTimelineInPartition
@@ -3420,84 +3426,6 @@ class TDFFileReader():
 
 
 
-    #####################################################
-    #
-    # [TDFFileReader::CheckIfCurrentTimeMeetsCriteria]
-    #
-    #####################################################
-    def CheckIfCurrentTimeMeetsCriteria(self, 
-                                        propertyRelationList, 
-                                        propertyNameList, 
-                                        propertyValueList, 
-                                        timelineEntry):
-        latestValues = timelineEntry['data']
-
-        numProperties = len(propertyNameList)                                                
-        for propNum in range(numProperties):
-            valueName = propertyNameList[propNum]
-            if (valueName not in latestValues):
-                return False
-
-            actualVal = latestValues[valueName]
-            if ((actualVal == TDF_INVALID_VALUE) or (actualVal <= TDF_SMALLEST_VALID_VALUE)):
-                return False
-
-            targetVal = float(propertyValueList[propNum])
-            relationName = propertyRelationList[propNum]
-
-            try:
-                labInfo = g_LabValueInfo[valueName]
-            except Exception:
-                print("Error! CheckIfCurrentTimeMeetsCriteria found undefined lab name: " + valueName)
-                return False
-            dataTypeName = labInfo['dataType']
-
-            ###############
-            if (relationName == ".EQ."):
-                if ((dataTypeName == TDF_DATA_TYPE_FLOAT) and (float(actualVal) != float(targetVal))):
-                    return False
-                elif ((dataTypeName in (TDF_DATA_TYPE_INT, TDF_DATA_TYPE_BOOL)) and (int(actualVal) != int(targetVal))):
-                    return False
-            ###############
-            elif (relationName == ".NEQ."):
-                if ((dataTypeName == TDF_DATA_TYPE_FLOAT) and (float(actualVal) == float(targetVal))):
-                    return False
-                elif ((dataTypeName in (TDF_DATA_TYPE_INT, TDF_DATA_TYPE_BOOL)) and (int(actualVal) == int(targetVal))):
-                    return False
-            ###############
-            elif (relationName == ".LT."):
-                if ((dataTypeName == TDF_DATA_TYPE_FLOAT) and (float(actualVal) >= float(targetVal))):
-                    return False
-                elif ((dataTypeName in (TDF_DATA_TYPE_INT, TDF_DATA_TYPE_BOOL)) and (int(actualVal) >= int(targetVal))):
-                    return False
-            ###############
-            elif (relationName == ".LTE."):
-                if ((dataTypeName == TDF_DATA_TYPE_FLOAT) and (float(actualVal) > float(targetVal))):
-                    return False
-                elif ((dataTypeName in (TDF_DATA_TYPE_INT, TDF_DATA_TYPE_BOOL)) and (int(actualVal) > int(targetVal))):
-                    return False
-            ###############
-            elif (relationName == ".GT."):
-                if ((dataTypeName == TDF_DATA_TYPE_FLOAT) and (float(actualVal) <= float(targetVal))):
-                    return False
-                elif ((dataTypeName in (TDF_DATA_TYPE_INT, TDF_DATA_TYPE_BOOL)) and (int(actualVal) <= int(targetVal))):
-                    return False
-            ###############
-            elif (relationName == ".GTE."):
-                if ((dataTypeName == TDF_DATA_TYPE_FLOAT) and (float(actualVal) < float(targetVal))):
-                    return False
-                elif ((dataTypeName in (TDF_DATA_TYPE_INT, TDF_DATA_TYPE_BOOL)) and (int(actualVal) < int(targetVal))):
-                    return False
-            ###############
-            else:
-                return False
-        # End - for propNum in range(numProperties):
-
-        return True
-    # End - CheckIfCurrentTimeMeetsCriteria
-
-
-
 
 
     #####################################################
@@ -3514,25 +3442,16 @@ class TDFFileReader():
     #   - The third is an Nx1 array of timecodes for each result
     #
     #####################################################
-    def GetDataForCurrentTimeline(self, 
-                                requirePropertyRelationList,
-                                requirePropertyNameList,
-                                requirePropertyValueList,
-                                fAddMinibatchDimension,
+    def GetDataForCurrentTimeline(self, fAddMinibatchDimension,
                                 fNeedTrueResultForEveryInput,
                                 numMissingInstances):
-        numRequireProperties = len(requirePropertyNameList)
         matchingRangeDay = -1
-
-        # Find where we will look for the data
-        firstTimelineIndex = 0
-        lastTimelineIndex = self.LastTimeLineIndex
 
         # Count the max possible number of complete data nodes.
         # We may return less than this, but this lets us allocate result storage.
-        maxNumCompleteLabSets = (lastTimelineIndex - firstTimelineIndex) + 1
+        maxNumCompleteLabSets = self.LastTimeLineIndex + 1
         if (maxNumCompleteLabSets <= 0):
-            return 0, None, None, None
+            return 0, None, None, None, None
 
         # Make a vector big enough to hold all possible labs.
         # We will likely not need all of this space, but there is enough
@@ -3550,6 +3469,7 @@ class TDFFileReader():
             else:
                 resultArray = np.zeros((maxNumCompleteLabSets, 1))
         timeCodeArray = np.zeros((maxNumCompleteLabSets))
+        criteriaValueArray = np.zeros((maxNumCompleteLabSets))
 
 
         # Initialize all time function objects
@@ -3561,33 +3481,33 @@ class TDFFileReader():
         # This loop will iterate over each step in the timeline.
         # Note, we may have to step over several entries to find all of the data values for one interval.
         lastNonZeroEntryIndex = -1
-        timeLineIndex = firstTimelineIndex
+        timeLineIndex = 0
         numReturnedDataSets = 0
-        prevReturnedTimeCode = -1
-        while (timeLineIndex <= lastTimelineIndex):
+        while (timeLineIndex <= self.LastTimeLineIndex):
             timelineEntry = self.CompiledTimeline[timeLineIndex]
+            foundAllInputs = True
 
             # Check if there are additional requirements for a timeline entry.
-            # Do this BEFORE we actually try to read the properties. It may save us the work
-            # of getting properties only to throw them away. On the other hand, we may check
-            # whether some timeline points are useful even if they do not containt he desired data.
-            if (numRequireProperties > 0):
-                fOKToUseTimepoint = self.CheckIfCurrentTimeMeetsCriteria(requirePropertyRelationList,
-                                                        requirePropertyNameList,
-                                                        requirePropertyValueList,
-                                                        timelineEntry)
-                # We may skip some entries that do not meet some criteria. For example, we may want to see
-                # all values of X when y >= 12. Skip this entry if it does not meet the criteria.
-                if (not fOKToUseTimepoint):
-                    timeLineIndex += 1
-                    continue
+            # NOTE! We Do NOT compute whether the criteria are met. Instead, we return
+            # all data, both meeting and not meeting criteria and then let the caller
+            # use the criteria to split the results up into sub-timelines.
+            latestValues = timelineEntry['data']
+            for requirePropertyName in self.requirePropertyNameList:
+                if (requirePropertyName != ""):
+                    if (requirePropertyName in latestValues):
+                        criteriaValueArray[numReturnedDataSets] = latestValues[requirePropertyName]
+                    else:
+                        foundAllInputs = False
+                        break
             # End - if (numRequireProperties > 0):
+
+            # If we did not find all of the Input values here, move on and try the next timeline position.
+            if (not foundAllInputs):
+                timeLineIndex += 1
+                continue
 
             # Find the labs we are looking for.
             # There are often lots of labs, but this only return labs that are relevant.
-            foundAllInputs = True
-            matchingRangeDay = -1
-            currentTimeCode = timelineEntry['TimeCode']
             for valueIndex in range(self.numInputValues):
                 # Get information about the lab.
                 try:
@@ -3597,23 +3517,14 @@ class TDFFileReader():
                     break
 
                 # Get the lab value itself.
-                if (valueIndex == self.DaysSincePrevResultIndex):
-                    foundIt = True
-                    matchingRangeDay = timelineEntry['TimeCode']
-                    if (prevReturnedTimeCode < 0):
-                        result = 30
-                    else:
-                        result = currentTimeCode - prevReturnedTimeCode
-                # End - if (valueIndex == self.DaysSincePrevResultIndex):
-                else:
-                    foundIt, result, matchingRangeDay = self.GetNamedValueFromTimeline(valueName, 
+                foundIt, result, matchingRangeDay = self.GetNamedValueFromTimeline(valueName, 
                                                                 self.AllValuesOffsetStartRange[valueIndex],
                                                                 self.AllValuesOffsetStopRange[valueIndex],
                                                                 self.AllValuesOffsetRangeOption[valueIndex],
                                                                 self.allValuesFunctionObjectList[valueIndex],
                                                                 timeLineIndex, matchingRangeDay)
 
-                # Some values, like meds, may be zero, and are still considered for short stretches. For example, you
+                # Some values, like meds, may be zero but are still considered for short stretches. For example, you
                 # can skip a day or two, but not long periods of time.
                 if ((foundIt) and (self.varIndexThatMustBeNonZero == valueIndex) and (self.maxZeroDays > 0)):
                     if (result == 0):
@@ -3633,9 +3544,7 @@ class TDFFileReader():
                     foundAllInputs = False
                     if (numMissingInstances is not None):
                         numMissingInstances[valueIndex] += 1
-                        result = TDF_INVALID_VALUE
-                    else:
-                        break
+                    break
                 # End - if (not foundIt):
 
                 try:
@@ -3645,11 +3554,6 @@ class TDFFileReader():
                         inputArray[numReturnedDataSets][valueIndex] = result
                 except Exception:
                     print("GetDataForCurrentTimeline. EXCEPTION when writing one value")
-                    print("     valueName=" + valueName)
-                    print("     fAddMinibatchDimension=" + str(fAddMinibatchDimension))
-                    print("     numReturnedDataSets=" + str(numReturnedDataSets) + ", valueIndex=" + str(valueIndex))
-                    print("     maxNumCompleteLabSets=" + str(maxNumCompleteLabSets) + ", self.numInputValues=" + str(self.numInputValues))
-                    print("GetDataForCurrentTimeline. inputArray.shape=" + str(inputArray.shape))
                     sys.exit(0)
             # End - for valueIndex, valueName in enumerate(self.allValueVarNameList):
 
@@ -3659,8 +3563,7 @@ class TDFFileReader():
                 continue
 
             # Now, try to get the result for this time step.
-            # Note, this is NOT normalized. That is a category ID, or exact value like INR, 
-            # so we want the actual numeric value, not a normalized version.            
+            # Note, this is used by a higher level in the code for computing the actual result.            
             foundResult, result, matchingRangeDay = self.GetNamedValueFromTimeline(self.resultValueName, 
                                                                 self.resultValueOffsetStartRange, 
                                                                 self.resultValueOffsetStopRange, 
@@ -3689,7 +3592,8 @@ class TDFFileReader():
             # Otherwise, if we can have intermetiate values without a valid result, then even if they are
             # identical, it is still useful, because it tells the system that another time period passed.
             #if ((fNeedTrueResultForEveryInput) and (numReturnedDataSets > 0)):
-            if (numReturnedDataSets > 0):
+            # BUGBUG - FIXME - <> Is this useful? Sometimes? Ever? Should it be anabled by a flag?
+            if ((False) and (numReturnedDataSets > 0)):
                 if (fAddMinibatchDimension):
                     compareVector = inputArray[numReturnedDataSets][0][:] != inputArray[numReturnedDataSets - 1][0][:]
                 else:
@@ -3707,17 +3611,17 @@ class TDFFileReader():
                     timeLineIndex += 1
                     continue
             # End - if ((fNeedTrueResultForEveryInput) and (numReturnedDataSets > 0)):
+            # End - BUGBUG - FIXME - <> Is this useful? Sometimes? Ever? Should it be anabled by a flag?
 
             # If we found all values, then assemble the next vector of results.
             numReturnedDataSets += 1
-            prevReturnedTimeCode = currentTimeCode
             if (numReturnedDataSets >= maxNumCompleteLabSets):
                 break
             timeLineIndex += 1
-        # End - while (timeLineIndex <= lastTimelineIndex)
+        # End - while (timeLineIndex <= self.LastTimeLineIndex)
 
         if (numReturnedDataSets <= 0):
-            return 0, None, None, None
+            return 0, None, None, None, None
         # End - if (numReturnedDataSets <= 0):
 
         if (numReturnedDataSets > maxNumCompleteLabSets):
@@ -3734,9 +3638,193 @@ class TDFFileReader():
             inputArray = inputArray[:numReturnedDataSets, :self.numInputValues]
             resultArray = resultArray[:numReturnedDataSets, :1]
         timeCodeArray = timeCodeArray[:numReturnedDataSets]
+        criteriaValueArray = criteriaValueArray[:numReturnedDataSets]
 
-        return numReturnedDataSets, inputArray, resultArray, timeCodeArray
+        return numReturnedDataSets, inputArray, resultArray, timeCodeArray, criteriaValueArray
     # End - GetDataForCurrentTimeline()
+
+
+
+
+    #####################################################
+    #
+    # [TDFFileReader::GetResultValue]
+    #
+    # This will only find values for VALUE_WHEN_AT_DAY_ID and VALUE_WHEN_AFTER_DAY_ID
+    # The sequence values are translated into VALUE_WHEN_AT_DAY_ID and VALUE_WHEN_AFTER_DAY_ID
+    # using the last day of the sequence. The VALUE_WHEN_EVER_ID is only used for tests.
+    #
+    # It returns 3 values: result, resultDay, hintIndex
+    #####################################################
+    def GetResultValue(self, hintIndex, dayNum, valueName, whenTimeID):
+        resultAtDay = TDF_INVALID_VALUE
+        resultAfterDay = TDF_INVALID_VALUE
+        resultDay = -1
+
+        if (whenTimeID not in [VALUE_WHEN_AT_DAY_ID, VALUE_WHEN_AFTER_DAY_ID]):
+            return TDF_INVALID_VALUE, -1, hintIndex
+
+        # Use the hint to try to skip ahead to values for the day we are interested in.
+        if (hintIndex >= 0):
+            timeLineIndex = hintIndex
+            hintIndex = -1
+        else:
+            timeLineIndex = 0
+
+        # Scan forward in the timeline until we find a value at or after the target day.        
+        resultDay = dayNum
+        while (timeLineIndex <= self.LastTimeLineIndex):
+            timelineEntry = self.CompiledTimeline[timeLineIndex]
+            currentTimeCode = timelineEntry['TimeCode']
+
+            # Any value before or after is a possible candidate
+            if (currentTimeCode >= dayNum):
+                # Record the location for a hint on the next time this procedure is called.
+                if (hintIndex < 0):
+                    hintIndex = timeLineIndex
+
+                latestValues = timelineEntry['data']
+                if (valueName in latestValues):
+                    currentResult = latestValues[valueName]
+                    if (currentResult > TDF_SMALLEST_VALID_VALUE):
+                        if (dayNum == currentTimeCode):
+                            resultAtDay = currentResult
+                        else:
+                            resultAfterDay = currentResult
+                        resultDay = currentTimeCode
+
+                        # Stop looking if we find the first value
+                        if (((whenTimeID == VALUE_WHEN_AT_DAY_ID) and (dayNum >= currentTimeCode))
+                            or ((whenTimeID == VALUE_WHEN_AFTER_DAY_ID) and (dayNum > currentTimeCode))):
+                            break
+                    # End - if (currentResult > TDF_SMALLEST_VALID_VALUE):                
+                # End - if (valueName in latestValues):
+            # End - if (dayNum >= currentTimeCode)
+
+            timeLineIndex += 1
+        # End - while (timeLineIndex <= self.LastTimeLineIndex):
+
+        # If we want the value at the end, then return that.
+        # If we cannot, then try to return the first value after the end.
+        if (whenTimeID == VALUE_WHEN_AT_DAY_ID):
+            if (TDF_INVALID_VALUE != resultAtDay):
+                return resultAtDay, resultDay, hintIndex
+            elif (TDF_INVALID_VALUE != resultAfterDay):
+                return resultAfterDay, resultDay, hintIndex
+            else:
+                return TDF_INVALID_VALUE, -1, hintIndex
+        # End - if (whenTimeID == VALUE_WHEN_AT_DAY_ID)
+        # If we want the value after the end, then return that.
+        # If we cannot, then try to return the value at the end.
+        else:   # if (whenTimeID == VALUE_WHEN_AFTER_DAY_ID):
+            if (TDF_INVALID_VALUE != resultAfterDay):
+                return resultAfterDay, resultDay, hintIndex
+            elif (TDF_INVALID_VALUE != resultAtDay):
+                return resultAtDay, resultDay, hintIndex
+            else:
+                return TDF_INVALID_VALUE, -1, hintIndex
+        # End - if (whenTimeID == VALUE_WHEN_AFTER_DAY_ID)
+    # End - GetResultValue()
+
+
+
+
+
+
+    #####################################################
+    #
+    # [TDFFileReader::CalculateTestResultValues]
+    #
+    # Returns:
+    #   fTestResult, resultDay, hintIndex
+    #####################################################
+    def CalculateTestResultValues(self, hintIndex, dayNum, valueName, relationID, value1, value2, whenTimeID):
+        resultAtDay = TDF_INVALID_VALUE
+        resultAfterDay = TDF_INVALID_VALUE
+        resultDay = -1
+
+        # Use the hint to try to skip ahead to values for the day we are interested in.
+        if (hintIndex >= 0):
+            timeLineIndex = hintIndex
+            hintIndex = -1
+        else:
+            timeLineIndex = 0
+
+        # Scan forward in the timeline until we find a value at or after the target day.        
+        while (timeLineIndex <= self.LastTimeLineIndex):
+            timelineEntry = self.CompiledTimeline[timeLineIndex]
+            currentTimeCode = timelineEntry['TimeCode']
+
+            # Any value before or after is a possible candidate
+            if (currentTimeCode >= dayNum):
+                # Record the location for a hint on the next time this procedure is called.
+                if (hintIndex < 0):
+                    hintIndex = timeLineIndex
+
+                latestValues = timelineEntry['data']
+                if (valueName in latestValues):
+                    criteriaVal = latestValues[valueName]
+                    if (criteriaVal > TDF_SMALLEST_VALID_VALUE):
+                        fTestResult = False
+                        if (((relationID == VALUE_RELATION_IN_RANGE_ID) and (criteriaVal >= value1) and (criteriaVal <= value2))
+                            or ((relationID == VALUE_RELATION_EQUAL_ID) and (criteriaVal == value1))
+                            or ((relationID == VALUE_RELATION_GREATER_THAN_ID) and (criteriaVal > value1))
+                            or ((relationID == VALUE_RELATION_GREATER_THAN_EQUAL_ID) and (criteriaVal >= value1))
+                            or ((relationID == VALUE_RELATION_LESS_THAN_ID) and (criteriaVal < value1))
+                            or ((relationID == VALUE_RELATION_LESS_THAN_EQUAL_ID) and (criteriaVal <= value1))):
+                            fTestResult = True
+
+                        resultDay = currentTimeCode
+                        if (dayNum == currentTimeCode):
+                            resultAtDay = fTestResult
+                        else:
+                            resultAfterDay = fTestResult
+
+                        # Stop looking if we find the first value
+                        if (((whenTimeID == VALUE_WHEN_AT_DAY_ID) and (dayNum >= currentTimeCode))
+                            or ((whenTimeID == VALUE_WHEN_AFTER_DAY_ID) and (dayNum > currentTimeCode))
+                            or ((whenTimeID == VALUE_WHEN_EVER_ID) and (dayNum > currentTimeCode) and (fTestResult))):
+                            break
+                    # End - if (currentResult > TDF_SMALLEST_VALID_VALUE):                
+                # End - if (valueName in latestValues):
+            # End - if (dayNum >= currentTimeCode):
+
+            timeLineIndex += 1
+        # End - while (timeLineIndex <= self.LastTimeLineIndex):
+
+
+
+        # If we want the value at the end, then return that.
+        # If we cannot, then try to return the first value after the end.
+        if (whenTimeID == VALUE_WHEN_AT_DAY_ID):
+            if (TDF_INVALID_VALUE != resultAtDay):
+                return resultAtDay, resultDay, hintIndex
+            elif (TDF_INVALID_VALUE != resultAfterDay):
+                return resultAfterDay, resultDay, hintIndex
+            else:
+                return TDF_INVALID_VALUE, -1, hintIndex
+        # End - if (whenTimeID == VALUE_WHEN_AT_DAY_ID)
+        # If we want the value after the end, then return that.
+        # If we cannot, then try to return the value at the end.
+        elif (whenTimeID == VALUE_WHEN_AFTER_DAY_ID):
+            if (TDF_INVALID_VALUE != resultAfterDay):
+                return resultAfterDay, resultDay, hintIndex
+            elif (TDF_INVALID_VALUE != resultAtDay):
+                return resultAtDay, resultDay, hintIndex
+            else:
+                return TDF_INVALID_VALUE, -1, hintIndex
+        # End - if (whenTimeID == VALUE_WHEN_AFTER_DAY_ID)
+        else:   # if (whenTimeID == VALUE_WHEN_EVER_ID):
+            if (TDF_INVALID_VALUE != resultAfterDay):
+                return resultAfterDay, resultDay, hintIndex
+            elif (TDF_INVALID_VALUE != resultAtDay):
+                return resultAtDay, resultDay, hintIndex
+            else:
+                return TDF_INVALID_VALUE, -1, hintIndex
+        # End - if (whenTimeID == VALUE_WHEN_AFTER_DAY_ID)
+
+        return TDF_INVALID_VALUE, -1, hintIndex
+    # End - CalculateTestResultValues()
 
 
 

@@ -34,25 +34,25 @@
 ################################################################################
 import os
 import sys
-import math
-import random
-from os.path import isfile
-import decimal  # For float-to-string workaround
+#import math
+#import random
+#from os.path import isfile
+#import decimal  # For float-to-string workaround
 from datetime import datetime
 import uuid as UUID
 import copy
 import shutil
 
 import xml.dom
-import xml.dom.minidom
-from xml.dom.minidom import parseString
-from xml.dom.minidom import getDOMImplementation
+#import xml.dom.minidom
+#from xml.dom.minidom import parseString
+#from xml.dom.minidom import getDOMImplementation
 
 import xmlTools as dxml
-import tdfFile as tdf
+#import tdfFile as tdf
 import dataShow as DataShow
 import medHistogram as MedHistogram
-import timeValueMatrix as TVMatrixLib
+#import timeValueMatrix as TVMatrixLib
 
 
 #------------------------------------------------
@@ -274,7 +274,7 @@ class GroupingFile():
         try:
             fileH = open(self.filePathName, "a+")
         except Exception:
-            print("Error from opening Covar file. File=" + oldFilePath)
+            print("Error from opening Covar file. File=" + self.filePathName)
             return
             
         # Write a new fixed header to the dest file
@@ -333,7 +333,7 @@ class GroupingFile():
 
         ####################
         # Read the next section start
-        startLine = self.ReadFileSectionStart(fileH)
+        _ = self.ReadFileSectionStart(fileH)
         if (self.CurrentSectionInFile == GROUPINGFILE_FILE_SECTION_GROUPS):
             self.ReadFileGroupsSection(fileH)
             self.CurrentSectionInFile = GROUPINGFILE_FILE_SECTION_NONE
@@ -515,7 +515,7 @@ class GroupingFile():
             preFlight.AddValue(numEntriesInSrcGroup)
         # End - for _, (groupName, memberList) in enumerate(self.MainDict.items()):
 
-        fIntType = False # True
+        fIntType = False  # True
         fDiscardValuesOutOfRange = False
         numBuckets = 15
         histogram = MedHistogram.TDFHistogram()
@@ -653,9 +653,9 @@ class GroupingFile():
         groupNumNum = 0
         for _, (groupName, memberList) in enumerate(self.MainDict.items()):
             curveFilePathName = curveFilePathNameDir + str(groupNumNum) + ".jpg"
-            averageInterpolatedSequence = self.DrawOneAverageSequence(tvMatrix, memberList, 
-                                                        fHigherIsHealthier, lastHealthyValue, valueErrorRange,
-                                                        curveFilePathName)
+            self.DrawOneAverageSequence(tvMatrix, memberList, 
+                                        fHigherIsHealthier, lastHealthyValue, valueErrorRange,
+                                        curveFilePathName)
 
             groupNumNum += 1
         # End - for _, (groupName, memberList) in enumerate(self.MainDict.items()):

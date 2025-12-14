@@ -429,3 +429,143 @@ def MakeKMeansCluster():
 
 
 
+    #####################################################
+    #
+    # [MLJob::RemoveAllCentroids]
+    #
+    #####################################################
+    def RemoveAllCentroids(self):
+        self.NumCentroids = 0
+        self.PreflightCentroids = []
+    # End of RemoveAllCentroids
+
+    #####################################################
+    #
+    # [MLJob::AddCentroids]
+    #
+    #####################################################
+    def AddCentroids(self, valueList, weight, avgDist, maxDist):
+        newDictEntry = {'ValList': valueList, 'W': weight, 'A': avgDist, 'M': maxDist}
+        self.PreflightCentroids.append(newDictEntry)
+        self.NumCentroids += 1
+    # End of AddCentroids
+
+
+    #####################################################
+    # [MLJob::GetNumCentroids]
+    #####################################################
+    def GetNumCentroids(self):
+        return self.NumCentroids
+
+    #####################################################
+    #
+    # [MLJob::GetNthCentroid]
+    #
+    #####################################################
+    def GetNthCentroid(self, index):
+        dictEntry = self.PreflightCentroids[index]
+        return dictEntry['ValList'], dictEntry['W'], dictEntry['A'], dictEntry['M']
+    # End of GetNthCentroid
+
+
+
+#           <CentroidList>
+#               <NumCentroids> Number of classes (int) </NumCentroids>
+#               <Centroid>
+#                   <Values>a, b, c, d...</Values>
+#                   <AvgDist>N</AvgDist>
+#                   <NumPoints>N</NumPoints>
+#               </Centroid>
+#               ......
+#           </CentroidList>
+
+RESULTS_PREFLIGHT_CENTROID_LIST_ELEMENT_NAME = "CentroidList"
+RESULTS_PREFLIGHT_NUM_CENTROIDS_ELEMENT_NAME = "NumCentroids"
+RESULTS_PREFLIGHT_CENTROID_ITEM_ELEMENT_NAME = "Centroid"
+RESULTS_PREFLIGHT_CENTROID_VALUE_LIST_ELEMENT_NAME = "Values"
+RESULTS_PREFLIGHT_CENTROID_WEIGHT_ELEMENT_NAME = "Weight"
+RESULTS_PREFLIGHT_CENTROID_AVG_DIST_ELEMENT_NAME = "AvgDist"
+RESULTS_PREFLIGHT_CENTROID_MAX_DIST_ELEMENT_NAME = "MaxDist"
+
+
+        self.NumCentroids = 0
+        self.PreflightCentroids = []
+        self.PreflightNumMissingInputsList = []
+
+
+
+From ReadPreflightResults:
+        ################################
+        # Read the existing list of centroids
+        self.NumCentroids = 0
+        self.PreflightCentroids = []
+        centroidListXMLNode = dxml.XMLTools_GetChildNode(self.ResultsPreflightXMLNode, 
+                                            RESULTS_PREFLIGHT_CENTROID_LIST_ELEMENT_NAME)
+        if (centroidListXMLNode is not None):
+            self.NumCentroids = dxml.XMLTools_GetChildNodeTextAsInt(centroidListXMLNode, 
+                                            RESULTS_PREFLIGHT_NUM_CENTROIDS_ELEMENT_NAME, 0)
+            # Read each Centroid
+            centroidXMLNode = dxml.XMLTools_GetChildNode(centroidListXMLNode, 
+                                                         RESULTS_PREFLIGHT_CENTROID_ITEM_ELEMENT_NAME)
+            while (centroidXMLNode is not None):
+                resultStr = dxml.XMLTools_GetChildNodeTextAsStr(centroidXMLNode, 
+                                                        RESULTS_PREFLIGHT_CENTROID_VALUE_LIST_ELEMENT_NAME, "")
+                inputList = MLJob_ConvertStringTo1DVector(resultStr)
+
+                weight = dxml.XMLTools_GetChildNodeTextAsFloat(centroidXMLNode, 
+                                                        RESULTS_PREFLIGHT_CENTROID_WEIGHT_ELEMENT_NAME, 0.0)
+                avgDist = dxml.XMLTools_GetChildNodeTextAsFloat(centroidXMLNode, 
+                                                        RESULTS_PREFLIGHT_CENTROID_AVG_DIST_ELEMENT_NAME, 0.0)
+                maxDist = dxml.XMLTools_GetChildNodeTextAsFloat(centroidXMLNode, 
+                                                        RESULTS_PREFLIGHT_CENTROID_MAX_DIST_ELEMENT_NAME, 0.0)
+
+                if ((resultClassID >= 0) and (classWeight >= 0)):
+                    newDictEntry = {'ValList': inputList, 'W': weight, 'A': avgDist, 'M': maxDist}
+                    self.PreflightCentroids.append(newDictEntry)
+
+                centroidXMLNode = dxml.XMLTools_GetPeerNode(centroidXMLNode, 
+                                                            RESULTS_PREFLIGHT_CENTROID_ITEM_ELEMENT_NAME)
+            # End - while (centroidXMLNode is not None):
+        # End - if (centroidListXMLNode is not None):
+
+
+
+
+
+From WritePreflightResults:
+        #############################
+        # Write the centroids
+        centroidListXMLNode = dxml.XMLTools_GetOrCreateChildNode(self.ResultsPreflightXMLNode, 
+                                                        RESULTS_PREFLIGHT_CENTROID_LIST_ELEMENT_NAME)
+        if (centroidListXMLNode is None):
+            return
+        dxml.XMLTools_RemoveAllChildNodes(centroidListXMLNode)
+
+        # Save the number of classes so we can easily rebuild the data structures when reading the job.
+        dxml.XMLTools_AddChildNodeWithText(centroidListXMLNode, 
+                                            RESULTS_PREFLIGHT_NUM_CENTROIDS_ELEMENT_NAME, 
+                                            str(self.NumCentroids))
+
+        # Make a new element for each Centroid
+        for centroidInfo in self.PreflightCentroids:
+            centroidXMLNode = dxml.XMLTools_AppendNewChildNode(centroidListXMLNode, 
+                                                            RESULTS_PREFLIGHT_CENTROID_ITEM_ELEMENT_NAME)
+            if (centroidXMLNode is not None):
+                resultStr = MLJob_Convert1DVectorToString(centroidInfo['ValList'])
+                dxml.XMLTools_AddChildNodeWithText(centroidXMLNode, 
+                                                    RESULTS_PREFLIGHT_CENTROID_VALUE_LIST_ELEMENT_NAME, 
+                                                    resultStr)
+                dxml.XMLTools_AddChildNodeWithText(centroidXMLNode, 
+                                                    RESULTS_PREFLIGHT_CENTROID_WEIGHT_ELEMENT_NAME, 
+                                                    str(centroidInfo['W']))
+                dxml.XMLTools_AddChildNodeWithText(centroidXMLNode, 
+                                                    RESULTS_PREFLIGHT_CENTROID_AVG_DIST_ELEMENT_NAME, 
+                                                    str(centroidInfo['A']))
+                dxml.XMLTools_AddChildNodeWithText(centroidXMLNode, 
+                                                    RESULTS_PREFLIGHT_CENTROID_MAX_DIST_ELEMENT_NAME, 
+                                                    str(centroidInfo['M']))
+            # End - if (centroidXMLNode is not None)
+        # End - for centroidInfo in self.PreflightCentroids
+
+
+

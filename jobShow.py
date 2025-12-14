@@ -102,7 +102,7 @@ def JobShow_WriteReport(job, fileType, filePathName):
 
     #########################
     testResultStr = ""
-    if (((job.GetResultValueType() == tdf.TDF_DATA_TYPE_INT) or (job.GetResultValueType() == tdf.TDF_DATA_TYPE_FLOAT)) 
+    if (((job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_INT) or (job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_FLOAT)) 
             and (numSequencesTested > 0)):
         csvLineReport += ", " + str(numSequencesTested)
 
@@ -149,7 +149,7 @@ def JobShow_WriteReport(job, fileType, filePathName):
         csvLineReport += ", " + str(fractionInt)
 
     #########################
-    elif ((job.GetResultValueType() == tdf.TDF_DATA_TYPE_BOOL) and (numSequencesTested > 0)):
+    elif ((job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_BOOL) and (numSequencesTested > 0)):
         totalNumItems = testNumItemsPerClass[0] + testNumItemsPerClass[1]
         if (totalNumItems > 0):
             totalAcc = float(testResults["NumCorrectPredictions"]) / float(totalNumItems)
@@ -183,7 +183,7 @@ def JobShow_WriteReport(job, fileType, filePathName):
             csvLineReport += ", " + str(roundedF1Score)
         else:
             csvLineReport += ", "
-    # End - elif ((job.GetResultValueType() == tdf.TDF_DATA_TYPE_BOOL) and (numSequencesTested > 0)):
+    # End - elif ((job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_BOOL) and (numSequencesTested > 0)):
 
 
 
@@ -399,28 +399,28 @@ def GetJobValue(job, valueName, valueIndex):
         lastLoss = lossList[len(lossList) - 1]
         return round(lastLoss, 4)
     #########################
-    elif ((valueName == "accuracy") and (job.GetResultValueType() == tdf.TDF_DATA_TYPE_BOOL) 
+    elif ((valueName == "accuracy") and (job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_BOOL) 
             and (numSequencesTested > 0)):
         if (numSequencesTested <= 0):
             return 0.0
         totalAcc = float(testResults["NumCorrectPredictions"]) / float(numSequencesTested)
         return round((totalAcc * 100.0), 1)
     #########################
-    elif ((valueName == "auc") and (job.GetResultValueType() == tdf.TDF_DATA_TYPE_BOOL) 
+    elif ((valueName == "auc") and (job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_BOOL) 
             and (numSequencesTested > 0) and (job.GetROCAUC(-1) > 0)):
         return round(job.GetROCAUC(-1), 3)
     #########################
-    elif ((valueName == "auprc") and (job.GetResultValueType() == tdf.TDF_DATA_TYPE_BOOL) 
+    elif ((valueName == "auprc") and (job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_BOOL) 
             and (numSequencesTested > 0) and (job.GetAUPRC(-1) > 0)):
         return round(job.GetAUPRC(-1), 3)
     #########################
-    elif ((valueName == "f1") and (job.GetResultValueType() == tdf.TDF_DATA_TYPE_BOOL) 
+    elif ((valueName == "f1") and (job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_BOOL) 
             and (numSequencesTested > 0) and (job.GetF1Score(-1) > 0)):
         return round(job.GetF1Score(-1), 3)
     #########################
     elif ((valueName == "accurratewithin5percent")
-            and ((job.GetResultValueType() == tdf.TDF_DATA_TYPE_INT) 
-                or (job.GetResultValueType() == tdf.TDF_DATA_TYPE_FLOAT))):
+            and ((job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_INT) 
+                or (job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_FLOAT))):
         if (numSequencesTested <= 0):
             return 0.0
 
@@ -431,8 +431,8 @@ def GetJobValue(job, valueName, valueIndex):
         return round(resultValue * 100.0)
     #########################
     elif ((valueName == "accurratewithin10percent")
-            and ((job.GetResultValueType() == tdf.TDF_DATA_TYPE_INT) 
-                or (job.GetResultValueType() == tdf.TDF_DATA_TYPE_FLOAT))):
+            and ((job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_INT) 
+                or (job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_FLOAT))):
         if (numSequencesTested <= 0):
             return 0.0
 
@@ -444,8 +444,8 @@ def GetJobValue(job, valueName, valueIndex):
         return round(resultValue * 100.0)
     #########################
     elif ((valueName == "accurratewithin20percent")
-            and ((job.GetResultValueType() == tdf.TDF_DATA_TYPE_INT) 
-                or (job.GetResultValueType() == tdf.TDF_DATA_TYPE_FLOAT))):
+            and ((job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_INT) 
+                or (job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_FLOAT))):
         if (numSequencesTested <= 0):
             return 0.0
 
@@ -458,8 +458,8 @@ def GetJobValue(job, valueName, valueIndex):
         return round(resultValue * 100.0)
     #########################
     elif ((valueName == "accurratewithin50percent")
-            and ((job.GetResultValueType() == tdf.TDF_DATA_TYPE_INT) 
-                or (job.GetResultValueType() == tdf.TDF_DATA_TYPE_FLOAT))):
+            and ((job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_INT) 
+                or (job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_FLOAT))):
         if (numSequencesTested <= 0):
             return 0.0
 
@@ -473,8 +473,8 @@ def GetJobValue(job, valueName, valueIndex):
         return round(resultValue * 100.0)
     #########################
     elif ((valueName == "accurratewithin100percent")
-            and ((job.GetResultValueType() == tdf.TDF_DATA_TYPE_INT) 
-                or (job.GetResultValueType() == tdf.TDF_DATA_TYPE_FLOAT))):
+            and ((job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_INT) 
+                or (job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_FLOAT))):
         if (numSequencesTested <= 0):
             return 0.0
 
@@ -489,32 +489,32 @@ def GetJobValue(job, valueName, valueIndex):
         return round(resultValue * 100.0)
     #########################
     elif ((valueName == "percentaccurate") and (valueIndex == 1)
-            and ((job.GetResultValueType() == tdf.TDF_DATA_TYPE_INT) 
-                or (job.GetResultValueType() == tdf.TDF_DATA_TYPE_FLOAT))):
+            and ((job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_INT) 
+                or (job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_FLOAT))):
         if (numSequencesTested <= 0):
             return 0.0
         resultValue = float(testResults["NumCorrectPredictions"]) / float(numSequencesTested)
         return round(resultValue * 100.0)
     #########################
     elif ((valueName == "percentaccurate") and (valueIndex == 2) 
-        and ((job.GetResultValueType() == tdf.TDF_DATA_TYPE_INT) 
-            or (job.GetResultValueType() == tdf.TDF_DATA_TYPE_FLOAT))):
+        and ((job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_INT) 
+            or (job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_FLOAT))):
         if (numSequencesTested <= 0):
             return 0.0
         resultValue = float(testResults["NumPredictionsWithin2Percent"]) / float(numSequencesTested)
         return round(resultValue * 100.0)
     #########################
     elif ((valueName == "percentaccurate") and (valueIndex == 5) 
-        and ((job.GetResultValueType() == tdf.TDF_DATA_TYPE_INT) 
-            or (job.GetResultValueType() == tdf.TDF_DATA_TYPE_FLOAT))):
+        and ((job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_INT) 
+            or (job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_FLOAT))):
         if (numSequencesTested <= 0):
             return 0.0
         resultValue = float(testResults["NumPredictionsWithin5Percent"]) / float(numSequencesTested)
         return round(resultValue * 100.0)
     #########################
     elif ((valueName == "percentaccurate") and (valueIndex == 10) 
-        and ((job.GetResultValueType() == tdf.TDF_DATA_TYPE_INT) 
-            or (job.GetResultValueType() == tdf.TDF_DATA_TYPE_FLOAT))):
+        and ((job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_INT) 
+            or (job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_FLOAT))):
         if (("NumPredictionsWithin10Percent" in testResults) and (numSequencesTested > 0)):
             resultValue = float(testResults["NumPredictionsWithin10Percent"]) / float(numSequencesTested)
         else:
@@ -522,31 +522,31 @@ def GetJobValue(job, valueName, valueIndex):
         return round(resultValue * 100.0)
     #########################
     elif ((valueName == "percentaccurate") and (valueIndex == 20) 
-        and ((job.GetResultValueType() == tdf.TDF_DATA_TYPE_INT) 
-            or (job.GetResultValueType() == tdf.TDF_DATA_TYPE_FLOAT))):
+        and ((job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_INT) 
+            or (job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_FLOAT))):
         if (numSequencesTested <= 0):
             return 0.0
         resultValue = float(testResults["NumPredictionsWithin20Percent"]) / float(numSequencesTested)
         return round(resultValue * 100.0)
     #########################
     elif ((valueName == "percentaccurate") and (valueIndex == 50) 
-        and ((job.GetResultValueType() == tdf.TDF_DATA_TYPE_INT) 
-            or (job.GetResultValueType() == tdf.TDF_DATA_TYPE_FLOAT))):
+        and ((job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_INT) 
+            or (job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_FLOAT))):
         if (numSequencesTested <= 0):
             return 0.0
         resultValue = float(testResults["NumPredictionsWithin50Percent"]) / float(numSequencesTested)
         return round(resultValue * 100.0)
     #########################
     elif ((valueName == "percentaccurate") and (valueIndex == 100) 
-        and ((job.GetResultValueType() == tdf.TDF_DATA_TYPE_INT) 
-            or (job.GetResultValueType() == tdf.TDF_DATA_TYPE_FLOAT))):
+        and ((job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_INT) 
+            or (job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_FLOAT))):
         if (numSequencesTested <= 0):
             return 0.0
         resultValue = float(testResults["NumPredictionsWithin100Percent"]) / float(numSequencesTested)
         return round(resultValue * 100.0)
     #########################
     elif ((valueName == "percentaccurate") 
-            and (job.GetResultValueType() == tdf.TDF_DATA_TYPE_BOOL) 
+            and (job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_BOOL) 
             and (numSequencesTested > 0)):
         if (numSequencesTested <= 0):
             return 0.0
@@ -658,7 +658,7 @@ def JobShow_ShowInputWeights(jobFilePathName, graphFilePath, reportFilePathName)
     listOfWts = [round((100.0 * x['wt']), 1) for x in varInfoList]
     listOfNames = [x['name'] for x in varInfoList]
 
-    sumOfAllFractions = np.sum(inputWtArray)
+    #sumOfAllFractions = np.sum(inputWtArray)
 
     if ((graphFilePath is not None) and (graphFilePath != "")):
         DataShow.DrawBarGraph("Title", "Input", listOfNames, "Weight", listOfWts, "", graphFilePath)
@@ -756,7 +756,7 @@ def GetMatchingJobsInDir(srcDirPathName, resultVarName, fIsLogistic):
             if (resultVarName != job.GetNetworkOutputVarName()):
                 continue
 
-            if ((job.GetResultValueType() == tdf.TDF_DATA_TYPE_BOOL)
+            if ((job.GetNetworkOutputType() == tdf.TDF_DATA_TYPE_BOOL)
                     and (fIsLogistic != job.GetIsLogisticNetwork())):
                 continue
 
@@ -869,7 +869,7 @@ def ShowResultVsLearningRate(jobDirName, titleStr, compareProperty,
         newDictEntry = {'x': lr, 'y': accuracyFloat}
         xyPairList.append(newDictEntry)
     # End - for currentJob in jobList:
-    sortedXYPairList = sorted(xyPairList, key=lambda k: k['x'])
+    #sortedXYPairList = sorted(xyPairList, key=lambda k: k['x'])
 
     xValueList = []
     yValueList = []

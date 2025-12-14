@@ -35,14 +35,13 @@
 #from ddToolsLib import *
 #
 ################################################################################
-
 import os
-import sys
-import configparser
+#import sys
+#import configparser
 import shutil as shutil
 from datetime import datetime
 
-import xml.dom
+#import xml.dom
 import subprocess
 from pathlib import Path
 import psutil

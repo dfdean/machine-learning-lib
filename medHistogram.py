@@ -27,17 +27,17 @@
 #
 ################################################################################
 import os
-import sys
-import math
-import random
-from os.path import isfile
-import decimal  # For float-to-string workaround
+#import sys
+#import math
+#import random
+#from os.path import isfile
+#import decimal  # For float-to-string workaround
 from datetime import datetime
 
-import statistics
-from scipy import stats
-from scipy.stats import spearmanr
-import numpy as np
+#import statistics
+#from scipy import stats
+#from scipy.stats import spearmanr
+#import numpy as np
 
 import xmlTools as dxml
 import tdfFile as tdf
@@ -107,7 +107,7 @@ class Preflight():
         self.TotalValues += value
     # End - AddValue
 
-   #####################################################
+    #####################################################
     # [TDFHistogram::GetNumValues]
     #####################################################
     def GetNumValues(self):
@@ -340,8 +340,6 @@ class TDFHistogram():
     #
     #####################################################
     def ReadFromFile(self, filePathName):
-        lineNum = 0
-
         ###################
         # Open the file.
         try:
@@ -353,9 +351,9 @@ class TDFHistogram():
 
         # Get the first line from file. This tells us if this is a new XML file or an old text file.
         try:
-            firstLine = fileH.readline() 
+            firstLine = fileH.readline()
         except Exception:
-            print("Error from reading Lab file. lineNum=" + str(self.lineNum))
+            print("Error from reading Lab file.")
             firstLine = ""
 
         firstLine = firstLine.lstrip().rstrip()
@@ -387,8 +385,6 @@ class TDFHistogram():
     #
     #####################################################
     def ReadFromXMLFile(self, fileXMLDOM):
-        lineNum = 0
-
         headerNode = dxml.XMLTools_GetNamedElementInDocument(fileXMLDOM, MEDHISTOGRAM_FILE_HEADER_HEAD_ELEMENT_NAME)
         bucketListNode = dxml.XMLTools_GetNamedElementInDocument(fileXMLDOM, MEDHISTOGRAM_FILE_DATA_ELEMENT_NAME)
         if (headerNode is None):
@@ -612,7 +608,7 @@ class TDFHistogram():
     # End - AverageAllValues
 
 
-   #####################################################
+    #####################################################
     # [TDFHistogram::GetNumBuckets]
     #####################################################
     def GetNumBuckets(self):

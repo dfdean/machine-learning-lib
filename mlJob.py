@@ -303,16 +303,6 @@ NETWORK_SEQUENCE_MAX_DURATION_DAYS_ELEMENT_NAME = "MaxSequenceDurationInDays"
 NETWORK_INPUT_ELEMENT_NAME = "Input"
 NETWORK_INPUT_VALUES_ELEMENT_NAME = "InputValues"
 NETWORK_INPUT_CRITERIA_TEST_ELEMENT_NAME = "UsefulInput"
-# Input and Output test relationship names
-g_NameToRelationIDDict = {
-            "in": tdf.VALUE_RELATION_IN_RANGE_ID,
-            "gt": tdf.VALUE_RELATION_GREATER_THAN_ID,
-            "gte": tdf.VALUE_RELATION_GREATER_THAN_EQUAL_ID,
-            "lt": tdf.VALUE_RELATION_LESS_THAN_ID,
-            "lte": tdf.VALUE_RELATION_LESS_THAN_EQUAL_ID, 
-            "eq": tdf.VALUE_RELATION_EQUAL_ID }
-VALUE_RELATION_IN_RANGE = "in"
-VALUE_RELATION_RANGE_SEPARATOR = ":"
 
 # <Output>
 NETWORK_OUTPUT_ELEMENT_NAME = "Output"
@@ -2907,48 +2897,8 @@ class MLJob():
         value2 = tdf.TDF_INVALID_VALUE
 
         criteriaStr = dxml.XMLTools_GetChildNodeTextAsStr(self.NetworkInputXMLNode, NETWORK_INPUT_CRITERIA_TEST_ELEMENT_NAME, "")
-        if (criteriaStr == ""):
-            return False, "", "", tdf.TDF_INVALID_VALUE, tdf.TDF_INVALID_VALUE
-
-        partsList = criteriaStr.split(" ")
-        if (len(partsList) < 3):
-            return False, "", "", tdf.TDF_INVALID_VALUE, tdf.TDF_INVALID_VALUE
-
-        varName = partsList[0].lstrip().rstrip()
-        relationStr = partsList[1].lstrip().rstrip().lower()
-        valueStr = partsList[2].lstrip().rstrip()
-        ##########################################
-        # Conditions may be "foo GT x" or else "foo in x:y". This affects how we parse
-        # the value.
-        if (relationStr == VALUE_RELATION_IN_RANGE):
-            if (":" not in valueStr):
-                return False, "", "", tdf.TDF_INVALID_VALUE, tdf.TDF_INVALID_VALUE
-
-            valPartsList = valueStr.split(":")
-            if (len(valPartsList) < 2):
-                return False, "", "", tdf.TDF_INVALID_VALUE, tdf.TDF_INVALID_VALUE
-
-            try:
-                value1 = float(valPartsList[0])
-            except Exception:
-                return False, "", "", tdf.TDF_INVALID_VALUE, tdf.TDF_INVALID_VALUE
-
-            try:
-                value2 = float(valPartsList[1])
-            except Exception:
-                return False, "", "", tdf.TDF_INVALID_VALUE, tdf.TDF_INVALID_VALUE
-        ##########################################
-        else:
-            try:
-                value1 = float(valueStr)
-            except Exception:
-                return False, "", "", tdf.TDF_INVALID_VALUE, tdf.TDF_INVALID_VALUE
-
-        if (relationStr not in g_NameToRelationIDDict):
-            return False, "", "", tdf.TDF_INVALID_VALUE, tdf.TDF_INVALID_VALUE
-
-        relationID = g_NameToRelationIDDict[relationStr]
-        return True, varName, relationID, value1, value2
+        fFoundIt, varName, relationID, value1, value2 = tdf.TDF_ParseCriteriaString(criteriaStr)
+        return fFoundIt, varName, relationID, value1, value2
     # End of GetInputCriteriaInfo
 
 
@@ -3056,46 +3006,8 @@ class MLJob():
 
         #############################
         if (outputSourceID in [NETWORK_OUTPUT_SOURCE_TEST_LOGISTIC_ID, NETWORK_OUTPUT_SOURCE_TEST_CATEGORY_ID]):
-            partsList = outputValueStr.split(" ")
-            if (len(partsList) < 3):
-                return False, outputSourceID, varName, relationID, value1, value2, whenTimeID
-
-            # Case-normalize the relation for comparisons, but leave the variable name case-sensitive.
-            varName = partsList[0].lstrip().rstrip()
-            relationStr = partsList[1].lstrip().rstrip().lower()
-            valueStr = partsList[2].lstrip().rstrip()
-
-            if (relationStr not in g_NameToRelationIDDict):
-                return False, outputSourceID, varName, relationID, value1, value2, whenTimeID
-            relationID = g_NameToRelationIDDict[relationStr]
-
-            # Conditions may be "foo GT x" or else "foo in x:y". 
-            # This affects how we parse the value.
-            if (relationID == tdf.VALUE_RELATION_IN_RANGE_ID):
-                if (":" not in valueStr):
-                    return False, outputSourceID, varName, relationID, value1, value2, whenTimeID
-
-                valPartsList = valueStr.split(":")
-                if (len(valPartsList) < 2):
-                    return False, outputSourceID, varName, relationID, value1, value2, whenTimeID
-
-                try:
-                    value1 = float(valPartsList[0])
-                except Exception:
-                    return False, outputSourceID, varName, relationID, value1, value2, whenTimeID
-
-                try:
-                    value2 = float(valPartsList[1])
-                except Exception:
-                    return False, outputSourceID, varName, relationID, value1, value2, whenTimeID
-            # End - if (relation.lower() == VALUE_RELATION_IN_RANGE):
-            else:
-                try:
-                    value1 = float(valueStr)
-                except Exception:
-                    return False, outputSourceID, varName, relationID, value1, value2, whenTimeID
-
-            return True, outputSourceID, varName, relationID, value1, value2, whenTimeID
+            fFoundIt, varName, relationID, value1, value2 = tdf.TDF_ParseCriteriaString(outputValueStr)
+            return fFoundIt, outputSourceID, varName, relationID, value1, value2, whenTimeID
         # End - if (outputSourceID in [NETWORK_OUTPUT_SOURCE_TEST_LOGISTIC_ID, NETWORK_OUTPUT_SOURCE_TEST_CATEGORY_ID])
 
 

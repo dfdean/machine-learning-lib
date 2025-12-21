@@ -660,11 +660,11 @@ class MLEngine_SingleLayerNeuralNet(nn.Module):
     # End - DebugPrint
 
     #####################################################
-    # MLEngine_SingleLayerNeuralNet.NeedTrueResultForEveryInput
+    # MLEngine_SingleLayerNeuralNet.EveryStepMakesPrediction
     #####################################################
-    def NeedTrueResultForEveryInput(self):
+    def EveryStepMakesPrediction(self):
         return True
-    # End - NeedTrueResultForEveryInput
+    # End - EveryStepMakesPrediction
 # class MLEngine_SingleLayerNeuralNet(nn.Module):
 
 
@@ -1277,11 +1277,11 @@ class MLEngine_DeepNeuralNet(nn.Module):
 
 
     #####################################################
-    # MLEngine_DeepNeuralNet.NeedTrueResultForEveryInput
+    # MLEngine_DeepNeuralNet.EveryStepMakesPrediction
     #####################################################
-    def NeedTrueResultForEveryInput(self):
+    def EveryStepMakesPrediction(self):
         return not self.IsRNN
-    # End - NeedTrueResultForEveryInput
+    # End - EveryStepMakesPrediction
 
 
 # class MLEngine_DeepNeuralNet(nn.Module):
@@ -1591,11 +1591,11 @@ class MLEngine_LSTMNeuralNet(nn.Module):
     # End - DebugPrint
 
     #####################################################
-    # MLEngine_LSTMNeuralNet.NeedTrueResultForEveryInput
+    # MLEngine_LSTMNeuralNet.EveryStepMakesPrediction
     #####################################################
-    def NeedTrueResultForEveryInput(self):
+    def EveryStepMakesPrediction(self):
         return False
-    # End - NeedTrueResultForEveryInput
+    # End - EveryStepMakesPrediction
 
 # class MLEngine_LSTMNeuralNet
 
@@ -1779,11 +1779,11 @@ class MLEngine_RNNModel(nn.Module):
     # End - DebugPrint
 
     #####################################################
-    # MLEngine_TransformerModel.NeedTrueResultForEveryInput
+    # MLEngine_TransformerModel.EveryStepMakesPrediction
     #####################################################
-    def NeedTrueResultForEveryInput(self):
+    def EveryStepMakesPrediction(self):
         return False
-    # End - NeedTrueResultForEveryInput
+    # End - EveryStepMakesPrediction
 
 # class MLEngine_RNNModel
 
@@ -1897,43 +1897,6 @@ def MLEngine_MakePyTorchNonLinear(nonLinearTypeStr, fIsLogistic, fIsFinalLayer):
 
 ################################################################################
 #
-# [MLEngine_NormalizeInputs]
-#
-# The normal value can be:
-#
-#       1. norm = (value - min) / (max - min)
-#       This is always positive
-#
-#       2. norm = (value - avgVal) / (max - min)
-#       This may be negative
-#
-################################################################################
-def MLEngine_NormalizeInputs(job, numDataSets, inputArray, fAddMinibatchDimension):
-    numInputVars, preflightInputMins, preflightInputRanges = job.GetPreflightResults()
-
-    for sampleNum in range(numDataSets):
-        if (fAddMinibatchDimension):
-            inputVec = inputArray[sampleNum][0]
-        else:
-            inputVec = inputArray[sampleNum]
-
-        # Fast path, copy the whole vector without change.
-        if (fAddMinibatchDimension):
-            inputArray[sampleNum][0] = inputVec
-            #print("    inputArray[sampleNum][0]=" + str(inputArray[sampleNum][0]))
-        else:
-            inputArray[sampleNum] = inputVec
-            #print("    inputArray[sampleNum]=" + str(inputArray[sampleNum]))
-    # End - for sampleNum in range(numDataSets)
-
-    return inputArray
-# End - MLEngine_NormalizeInputs
-
-
-
-
-################################################################################
-#
 # [MLEngine_TrainGroupOfDataPoints]
 # 
 # Batch all data for a single timeline.
@@ -1954,6 +1917,7 @@ def MLEngine_TrainGroupOfDataPoints(job, localNeuralNet, localLossFunction, loca
                                     fAddMinibatchDimension, maxDaysWithZeroValue):
     localNeuralNet.CheckState(job)
     epochNum = job.GetEpochNum()
+    fEveryStepMakesPrediction = localNeuralNet.EveryStepMakesPrediction()
 
     # Normalize all inputs using the value from preflight
     #inputArray = MLEngine_NormalizeInputs(job, numDataSamples, inputArray, fAddMinibatchDimension)
@@ -1963,17 +1927,35 @@ def MLEngine_TrainGroupOfDataPoints(job, localNeuralNet, localLossFunction, loca
     trueResultTensor = torch.from_numpy(trueResultArray).float()
 
     # Compare output and ground-truth target in the job.
-    # This is NOT a loss function, but rather it only updates job statistics.
+    # This does not change the ouputs, but rather it only updates job statistics.
     if (epochNum == 0):
-        for index in range(numDataSamples):
+        if (fEveryStepMakesPrediction):
+            for index in range(numDataSamples):
+                if (fAddMinibatchDimension):
+                    inputVec = inputArray[index][0]
+                    trueResult = trueResultArray[index][0][0]
+                else:
+                    inputVec = inputArray[index]
+                    trueResult = trueResultArray[index][0]
+
+                if (trueResult == tdf.TDF_INVALID_VALUE):
+                    raise Exception()
+                    ASSERT_ERROR("MLEngine_TrainGroupOfDataPoints")
+                job.RecordTrainingSample(inputVec, trueResult)
+            # End - for index in range(numDataSamples):
+        else:  # if (not fEveryStepMakesPrediction):
             if (fAddMinibatchDimension):
-                inputVec = inputArray[index][0]
-                trueResult = trueResultArray[index][0][0]
+                inputVec = inputArray[numDataSamples - 1][0]
+                trueResult = trueResultArray[numDataSamples - 1][0][0]
             else:
-                inputVec = inputArray[index]
-                trueResult = trueResultArray[index][0]
+                inputVec = inputArray[numDataSamples - 1]
+                trueResult = trueResultArray[numDataSamples - 1][0]
+
+            if (trueResult == tdf.TDF_INVALID_VALUE):
+                raise Exception()
+                ASSERT_ERROR("MLEngine_TrainGroupOfDataPoints")
             job.RecordTrainingSample(inputVec, trueResult)
-        # End - for index in range(numDataSamples):
+        # End - if (not fEveryStepMakesPrediction):
     # End - if (epochNum):
 
     if (cudaIsAvailable):
@@ -2018,7 +2000,7 @@ def MLEngine_TrainGroupOfDataPoints(job, localNeuralNet, localLossFunction, loca
 
     # Now, compare predicted outputs to the ground-truth targets and compute the 
     # Loss (or Divergence or Div). This will also backpropagate and update the weights.
-    MLEngine_ComputeTrainingLossAndUpdate(job, predictionTensor, trueResultTensor, 
+    MLEngine_ComputeTrainingLossAndUpdate(job, numDataSamples, predictionTensor, trueResultTensor, 
                                         localNeuralNet, localOptimizer,
                                         lossTypeStr, localLossFunction)
     localNeuralNet.CheckState(job)
@@ -2035,15 +2017,22 @@ def MLEngine_TrainGroupOfDataPoints(job, localNeuralNet, localLossFunction, loca
 # 
 # This procedure is only called for Pytorch.
 ################################################################################
-def MLEngine_ComputeTrainingLossAndUpdate(job, predictionTensor, trueResultTensor, 
+def MLEngine_ComputeTrainingLossAndUpdate(job, numDataSamples, predictionTensor, trueResultTensor, 
                                         localNeuralNet, localOptimizer,
                                         lossTypeStr, localLossFunction):
+    fEveryStepMakesPrediction = localNeuralNet.EveryStepMakesPrediction()
+
     # Compute the loss between the prediction and the actual result.
     # Initially:
     #   predictionTensor is a 3-d array: [ N, miniBatch=1, C ]
     #   trueResultTensor is a 3-d array: [ N, miniBatch=1, C ]
     # Where N is sequence size and C = number of classes
     # We may have to convert this for different loss functions.
+
+    # If we only care about the last element in the tensor, then remove everything else
+    if (not fEveryStepMakesPrediction):
+        predictionTensor = predictionTensor[numDataSamples - 1:, -1, :]
+        trueResultTensor = trueResultTensor[numDataSamples - 1:, -1, -1]
 
     ##################
     # nllloss takes parameters:
@@ -2133,27 +2122,10 @@ def MLEngine_TestGroupOfDataPoints(job, localNeuralNet, cudaIsAvailable, gpuDevi
                                    inputArray, trueResultArray, dayNumArray, numDataSamples, 
                                    fAddMinibatchDimension, networkOutputDataType,
                                    maxDaysWithZeroValue):
-    # Normalize all inputs using the value from preflight
+    fEveryStepMakesPrediction = localNeuralNet.EveryStepMakesPrediction()
+
+    #Normalize all inputs using the value from preflight
     #inputArray = MLEngine_NormalizeInputs(job, numDataSamples, inputArray, fAddMinibatchDimension)
-
-    # Build a number of inputs that eventually lead to each output
-    # fEveryInputMakesPrediction = localNeuralNet.NeedTrueResultForEveryInput()
-    numSequencesForEachResult = []
-    if (True):   # (fEveryInputMakesPrediction):
-        numPreviousInputSequences = 0
-        for index in range(numDataSamples):
-            if (fAddMinibatchDimension):
-                trueResult = trueResultArray[index][0][0]
-            else:
-                trueResult = trueResultArray[index][0]
-
-            if (trueResult == tdf.TDF_INVALID_VALUE):
-                numPreviousInputSequences += 1
-            else:
-                numSequencesForEachResult.append(numPreviousInputSequences + 1)
-                numPreviousInputSequences = 0
-        # End - for result in trueResultArray:
-    # End - if (fEveryInputMakesPrediction):
 
     # Convert numpy matrices to Pytorch Tensors
     inputGroupSequenceTensor = torch.from_numpy(inputArray).float()
@@ -2183,73 +2155,73 @@ def MLEngine_TestGroupOfDataPoints(job, localNeuralNet, cudaIsAvailable, gpuDevi
     if (cudaIsAvailable):
         predictionTensor = predictionTensor.cpu()
 
-    ASSERT_IF((predictionTensor is None), "MLEngine_TestGroupOfDataPoints. predictionTensor is None")
-    predictedResultList = MLEngine_MakeListOfResults(job, predictionTensor, numDataSamples, 
-                                                     networkOutputDataType)
-
-    # Compare predicted outputs to the ground-truth targets.
-    # We store the results in the Job, and include lots of statistics like what
-    # the accuracy was for different groups of result. 
-    for index in range(numDataSamples):
-        # Pytorch uses a 3rd dimension, for minibatches
-        if (fAddMinibatchDimension):
-            trueResult = trueResultTensor[index][0][0].item()
-        else:
-            trueResult = trueResultTensor[index][0].item()
-
-        if (trueResult == tdf.TDF_INVALID_VALUE):
-            continue
-
-        if (numDaysForResult is not None):
-            subGroupNum = int(numDaysForResult[index])
-        else:
-            subGroupNum = -1
-
-        job.RecordTestingResult(trueResult, predictedResultList[index], subGroupNum)
-    # End - for index in range(numDataSamples):
-# End - MLEngine_TestGroupOfDataPoints
-
-
-
-
-
-
-################################################################################
-#
-# [MLEngine_MakeListOfResults]
-#
-################################################################################
-def MLEngine_MakeListOfResults(job, predictedResultTensor, numDataSamples, networkOutputDataType):
     # Note, a Boolean is a category result with two categories (0 and 1). But a Boolean
     # that is also a logistic, is a single floating point value between 0 and 1.
     isLogistic = job.GetIsLogisticNetwork()
 
     # Compare predicted outputs to the ground-truth targets.
     # An int or float output is just the number.
+    ASSERT_IF((predictionTensor is None), "MLEngine_TestGroupOfDataPoints. predictionTensor is None")
     if (networkOutputDataType in (tdf.TDF_DATA_TYPE_FLOAT, tdf.TDF_DATA_TYPE_INT)):
-        predictedResultList = predictedResultTensor[:, 0, 0].tolist()
+        predictedResultList = predictionTensor[:, 0, 0].tolist()
     # End - if (tdf.TDF_DATA_TYPE_FLOAT or tdf.TDF_DATA_TYPE_INT):
     # In a logistic, we want the probability that an item is true, not the most likely.
     # Note, a Boolean is a category result with two categories (0 and 1). But a Boolean
     # that is also a logistic is a single floating point value between 0 and 1.
     elif (isLogistic):
-        # predictedResultTensor is N x 1 x 1 where minibatch dim is 1 and there is also only 1 output, 
+        # predictionTensor is N x 1 x 1 where minibatch dim is 1 and there is also only 1 output, 
         # which is the result of the sigmoid.
-        predictedResultList = predictedResultTensor[:, 0, 0].tolist()
+        predictedResultList = predictionTensor[:, 0, 0].tolist()
     # End - if (isLogistic):
     # A category output is a list of probabilities. Get the class ID with the top probability
     elif (networkOutputDataType == tdf.TDF_DATA_TYPE_BOOL):
         predictedResultList = [0] * numDataSamples
         for index in range(numDataSamples):
-            topProbability, topIndexTensor = predictedResultTensor[index][0].topk(1)
+            topProbability, topIndexTensor = predictionTensor[index][0].topk(1)
             predictedResult = topIndexTensor.item()
 
             predictedResultList[index] = predictedResult
         # End - for index in range(numDataSamples):
     # End - elif (tdf.TDF_DATA_TYPE_BOOL)):
 
-    return predictedResultList
-# End - MLEngine_MakeListOfResults
+
+    # Compare predicted outputs to the ground-truth targets.
+    # We store the results in the Job, and include lots of statistics like what
+    # the accuracy was for different groups of result. 
+    if (fEveryStepMakesPrediction):
+        for index in range(numDataSamples):
+            # Pytorch uses a 3rd dimension, for minibatches
+            if (fAddMinibatchDimension):
+                trueResult = trueResultTensor[index][0][0].item()
+            else:
+                trueResult = trueResultTensor[index][0].item()
+
+            if (trueResult == tdf.TDF_INVALID_VALUE):
+                raise Exception()
+                ASSERT_ERROR("MLEngine_TrainGroupOfDataPoints")
+                continue
+
+            # if (numDaysForResult is not None): subGroupNum = int(numDaysForResult[index])
+            subGroupNum = -1
+
+            job.RecordTestingResult(trueResult, predictedResultList[index], subGroupNum)
+        # End - for index in range(numDataSamples):
+    else:   # if (not fEveryStepMakesPrediction):
+        if (fAddMinibatchDimension):
+            trueResult = trueResultTensor[numDataSamples - 1][0][0].item()
+        else:
+            trueResult = trueResultTensor[numDataSamples - 1][0].item()
+
+        if (trueResult == tdf.TDF_INVALID_VALUE):
+            raise Exception()
+            ASSERT_ERROR("MLEngine_TrainGroupOfDataPoints")
+
+        # if (numDaysForResult is not None): subGroupNum = int(numDaysForResult[index])
+        subGroupNum = -1
+
+        job.RecordTestingResult(trueResult, predictedResultList[index], subGroupNum)
+    # End - if (not fEveryStepMakesPrediction):
+# End - MLEngine_TestGroupOfDataPoints
 
 
 
@@ -2372,7 +2344,7 @@ def MLEngine_PreflightOneFilePartitionImpl(job, currentPartitionStart, currentPa
 
         # Get a sequence of all data points for the current timeline. 
         numReturnedDataSets, inputArray, resultArray, dayNumArray, criteriaValueArray = tdfReader.GetDataForCurrentTimeline(False,  # fAddMinibatchDimension
-                                                                False,  # NeedTrueResultForEveryInput
+                                                                False,  # EveryStepMakesPrediction
                                                                 preflightNumMissingInputsList)  # Count missing instances
 
         if (numReturnedDataSets >= 1):
@@ -2418,19 +2390,22 @@ def MLEngine_ProcessOneFilePartitionImpl(fIsTraining, job,
                                         cudaIsAvailable, gpuDevice, TimelinesForTrainingPriority):
     fEOF = False
     numDataPointsProcessed = 0
+    numTimelinesProcessed = 0
 
+    # Get the inputs and outputs
     inputNameListStr = job.GetNetworkInputVarNames()
     resultValueName = job.GetNetworkOutputVarName()
+    criteriaVarNameList = job.GetInputCriteriaVarList()
     if ((inputNameListStr == "") or (resultValueName == "")):
         ASSERT_ERROR("MLEngine_ProcessOneFilePartitionImpl - Error from Params")
-
-    criteriaVarNameList = job.GetInputCriteriaVarList()
     fFoundIt, outputSourceID, resultVarName, relationID, value1, value2, whenTimeID = job.GetNetworkOutputInfo()
     if (not fFoundIt):
         ASSERT_ERROR("MLEngine_ProcessOneFilePartitionImpl - Error from GetNetworkOutputInfo")
 
+    # Get some properties that are speficit to training or testing.
     if (fIsTraining):
         tdfFilePathName = job.GetDataParam("TrainData", "")
+        lossTypeStr = job.GetTrainingParamStr(mlJob.TRAINING_OPTION_LOSS_FUNCTION_ELEMENT_NAME, "").lower()
     else:
         tdfFilePathName = job.GetDataParam("TestData", "")
         networkOutputDataType = job.GetNetworkOutputType()
@@ -2440,13 +2415,9 @@ def MLEngine_ProcessOneFilePartitionImpl(fIsTraining, job,
                                             criteriaVarNameList)
     if (tdfReader is None):
         ASSERT_ERROR("MLEngine_ProcessOneFilePartitionImpl - Error from TDF_CreateTDFFileReader")
-
     maxDaysWithZeroValue = tdfReader.GetMaxDaysWithZeroValue()
     numInputValues = tdfReader.GetNumInputValues()
-
-    # Get some properties that are used for each training.
-    lossTypeStr = job.GetTrainingParamStr(mlJob.TRAINING_OPTION_LOSS_FUNCTION_ELEMENT_NAME, "").lower()
-    fEveryInputMakesPrediction = localNeuralNet.NeedTrueResultForEveryInput()
+    fEveryStepMakesPrediction = localNeuralNet.EveryStepMakesPrediction()
 
     # In some cases, we add a batches dimension to all data:
     #   Pytorch wants data in the form: (NumSamples x NumBatches x NumFeatures)
@@ -2455,12 +2426,11 @@ def MLEngine_ProcessOneFilePartitionImpl(fIsTraining, job,
  
     #######################################
     # This loop looks at each timeline in the current partition
-    numTimelinesProcessed = 0
     fFoundTimeline, fEOF, _, _ = tdfReader.GotoFirstTimelineInPartition(-1, -1, currentPartitionStart, currentPartitionStop, False)
     while ((not fEOF) and (fFoundTimeline)):
         # Get all data points for a single timeline. 
         numReturnedDataSets, inputArray, resultArray, dayNumArray, criteriaValueArray = tdfReader.GetDataForCurrentTimeline(fAddMinibatchDimension,
-                                                                                fEveryInputMakesPrediction, None)
+                                                                                fEveryStepMakesPrediction, None)
         numTimelinesProcessed += 1
         if (numReturnedDataSets < 1):
             # Go to the next timeline in this partition
@@ -2468,7 +2438,6 @@ def MLEngine_ProcessOneFilePartitionImpl(fIsTraining, job,
             continue
 
         sectionInfoList = MLEngine_DivideTimelineIntoSections(job, numReturnedDataSets, dayNumArray, criteriaValueArray)
-        fOnlyOneSection = len(sectionInfoList) == 1
         for currentSection in sectionInfoList:
             firstIndex = currentSection['firstIndex']
             lastIndex = currentSection['lastIndex']
@@ -2510,7 +2479,7 @@ def MLEngine_ProcessOneFilePartitionImpl(fIsTraining, job,
             # We still get results earlier, because that allows us to decide which results are rare or common
             # and that can be used to prioritize training.
             hintIndex = firstIndex
-            for currentIndex in range(firstIndex, lastIndex):
+            for currentIndex in range(firstIndex, lastIndex + 1):
                 dayNum = dayNumArray[currentIndex]
 
                 if (outputSourceID == mlJob.NETWORK_OUTPUT_SOURCE_VALUE_ID):
@@ -2534,18 +2503,13 @@ def MLEngine_ProcessOneFilePartitionImpl(fIsTraining, job,
                         resultArray[currentIndex] = newResult
             # End - for currentIndex in range(firstIndex, lastIndex):
 
-            if (fOnlyOneSection):
-                currentSectionInputArray = inputArray
-                currentSectionResultArray = resultArray
-                currentSectionDayNumArray = dayNumArray
-            elif (fAddMinibatchDimension):
-                currentSectionInputArray = inputArray[firstIndex:lastIndex, :1, :numInputValues]
-                currentSectionResultArray = resultArray[firstIndex:lastIndex, :1:1]
-                currentSectionDayNumArray = dayNumArray[firstIndex:lastIndex]
+            if (fAddMinibatchDimension):
+                currentSectionInputArray = inputArray[firstIndex:lastIndex + 1, :1, :numInputValues + 1]
+                currentSectionResultArray = resultArray[firstIndex:lastIndex + 1, :1, :1]
             else:
-                currentSectionInputArray = inputArray[firstIndex:lastIndex, :numInputValues]
-                currentSectionResultArray = resultArray[firstIndex:lastIndex, :1]
-                currentSectionDayNumArray = dayNumArray[firstIndex:lastIndex]
+                currentSectionInputArray = inputArray[firstIndex:lastIndex + 1, :numInputValues + 1]
+                currentSectionResultArray = resultArray[firstIndex:lastIndex + 1, :1]
+            currentSectionDayNumArray = dayNumArray[firstIndex:lastIndex + 1]
             numReturnedDataSets = (lastIndex - firstIndex) + 1
 
             localNeuralNet.CheckState(job)

@@ -315,6 +315,28 @@ def DDTools_DeleteDirContents(dirPathName):
 
 
 
+################################################################################
+#
+# [DDTools_MkDir]
+#
+################################################################################
+def DDTools_MkDir(dirPathName):
+    if (os.path.isdir(dirPathName)):
+        pass
+    else:
+        try:
+            os.mkdir(dirPathName)
+        except Exception:
+            pass
+
+    try:
+        os.chmod(dirPathName, 0o777)
+    except Exception:
+        pass
+# End - DDTools_MkDir
+
+
+
 
 ################################################################################
 #

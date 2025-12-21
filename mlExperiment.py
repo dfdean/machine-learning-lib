@@ -457,18 +457,26 @@ def GetCorrelationBetweenTwoVars(
                     tdfFilePathName, 
                     valueName1, 
                     valueName2,
-                    requirePropertyNameList, 
-                    requirePropertyRelationList, 
-                    requirePropertyValueList,
-                    correlationResultFilePathName):
+                    criteriaStr,
+                    minDaysInCriteria,
+                    heterogenousTimelineCorrelationResultFilePathName,
+                    avgOfHomogenousTimelineCorrelationResultFilePathName):
+    listOfAllCorrelations = []
+
+    fFoundIt, criteriaVarName, criteriaRelationID, criteriaValue1, criteriaValue2 = tdf.TDF_ParseCriteriaString(criteriaStr)
+    # It is OK for fFoundIt to be false. That just means no criteria apply.
+    # if (not fFoundIt): - print("Dont Panic Dude!")
+
     # It is possible we already found this correlation on a previous instance
     # of this program that crashed. In this case, we are running on a restarted
     # process, so do not waste time recomputing work that is already done.
     # Look for this pair in the result file
-    resultFileInfo = MedGraph.MedGraphFile(correlationResultFilePathName)
-    foundIt, resultStr = resultFileInfo.GetResultForInputOutputPair(valueName1, valueName2)
-    if (foundIt):
-        return resultStr
+    heterogenousTimelineResultFileInfo = MedGraph.MedGraph_OpenExistingGraph(heterogenousTimelineCorrelationResultFilePathName, "")
+    avgOfHomogenousTimelineResultFileInfo = MedGraph.MedGraph_OpenExistingGraph(avgOfHomogenousTimelineCorrelationResultFilePathName, "")
+    foundIt1, heterogenousResultStr = heterogenousTimelineResultFileInfo.GetEdge(valueName1, valueName2)
+    foundIt2, avgHomogenousResultStr = avgOfHomogenousTimelineResultFileInfo.GetEdge(valueName1, valueName2)
+    if ((foundIt1) and (foundIt2)):
+        return
     # End - if (foundIt)
 
     # Get information about the requested variables. This splits
@@ -479,30 +487,31 @@ def GetCorrelationBetweenTwoVars(
     labInfo1, nameStem1, valueOffset1, _, _, functionName1 = tdf.TDF_ParseOneVariableName(valueName1)
     if (labInfo1 is None):
         print("!Error! GetCorrelationBetweenTwoVars Cannot parse variable: " + valueName1)
-        return None, None
+        return
     labInfo2, nameStem2, valueOffset2, _, _, functionName2 = tdf.TDF_ParseOneVariableName(valueName2)
     if (labInfo2 is None):
         print("!Error! GetCorrelationBetweenTwoVars Cannot parse variable: " + valueName2)
-        return None, None
+        return
     if (functionName1 != ""):
         functionObject1 = timefunc.CreateTimeValueFunction(functionName1, nameStem1)
         if (functionObject1 is None):
             print("\n\n\nERROR!! GetCorrelationBetweenTwoVars Undefined function1: " + functionName1)
             sys.exit(0)
+            return
     if (functionName2 != ""):
         functionObject2 = timefunc.CreateTimeValueFunction(functionName2, nameStem2)
         if (functionObject2 is None):
             print("\n\n\nERROR!! GetCorrelationBetweenTwoVars Undefined function2: " + functionName2)
             sys.exit(0)
+            return
 
     var1Type = tdf.TDF_GetVariableType(nameStem1)
     var2Type = tdf.TDF_GetVariableType(nameStem2)
 
     # Open the file
-    tdfFile = tdf.TDF_CreateTDFFileReader(tdfFilePathName, 
-                                          valueName1, 
-                                          valueName2,
-                                          requirePropertyNameList)
+    tdfFile = tdf.TDF_CreateTDFFileReader(tdfFilePathName, valueName1, valueName2, [ criteriaVarName ])
+    if (tdfFile is None):
+        return
 
     # Iterate over every patient to build a list of values.
     # These lists will span patients, so they are useful for boolean values
@@ -514,11 +523,28 @@ def GetCorrelationBetweenTwoVars(
         currentList1, currentList2 = tdfFile.GetSyncedPairOfValueListsForCurrentTimeline(
                                                     nameStem1, valueOffset1, functionObject1,
                                                     nameStem2, valueOffset2, functionObject2,
-                                                    requirePropertyNameList,
-                                                    requirePropertyRelationList,
-                                                    requirePropertyValueList)
+                                                    criteriaVarName, criteriaRelationID, criteriaValue1, criteriaValue2,
+                                                    minDaysInCriteria)
 
+        # There are 2 ways to combine results across different timelines
+        # 1. Make 1 long list of variables - that spans across timelines, then find a correlation between 
+        #   the 2 heterogenous lists
+        # 2. Make a separate list of variables for each timeline, find a correlation for each timeline, 
+        #   and then average the correlations for all timelines
         if (len(currentList1) > 0):
+            try:
+                # For Boolean, we can use the Point-biserial correlation coefficient.
+                if ((var1Type == tdf.TDF_DATA_TYPE_BOOL) 
+                        or (var2Type == tdf.TDF_DATA_TYPE_BOOL)):
+                    correlation, _ = stats.pointbiserialr(list1, list2)
+                else:
+                    correlation, _ = spearmanr(list1, list2)
+                if (not math.isnan(correlation)):
+                    listOfAllCorrelations.append(correlation)
+            except Exception:
+                pass
+
+            # Build up the lists that span all timelines
             list1.extend(currentList1)
             list2.extend(currentList2)
         # End - if (len(currentList1) > 0):
@@ -528,26 +554,33 @@ def GetCorrelationBetweenTwoVars(
 
     tdfFile.Shutdown()
 
+
     # We are done searching the entire file. 
     # If we were combining the lists of all patients, then get the correlation
     # for the total aggregate list now.
-    correlation = 0
+    correlationAcrossDifferentTimelines = 0
     if (len(list1) > MIN_SEQUENCE_LENGTH_FOR_CORRELATION):
         try:
             # For Boolean, we can use the Point-biserial correlation coefficient.
             if ((var1Type == tdf.TDF_DATA_TYPE_BOOL) 
                     or (var2Type == tdf.TDF_DATA_TYPE_BOOL)):
-                correlation, _ = stats.pointbiserialr(list1, list2)
+                correlationAcrossDifferentTimelines, _ = stats.pointbiserialr(list1, list2)
             else:
-                correlation, _ = spearmanr(list1, list2)
+                correlationAcrossDifferentTimelines, _ = spearmanr(list1, list2)
         except Exception:
-            correlation = 0
-    # End - if (len(list1) > 2):
+            correlationAcrossDifferentTimelines = 0
+    # End - if (len(list1) > MIN_SEQUENCE_LENGTH_FOR_CORRELATION):
 
-    # Append the result to the file.
-    resultFileInfo.AppendResult(valueName1, valueName2, correlation)
+    if (not math.isnan(correlationAcrossDifferentTimelines)):
+        heterogenousTimelineResultFileInfo.AppendEdge(valueName1, valueName2, str(correlationAcrossDifferentTimelines))
 
-    return correlation
+
+    # Get the average of correlations within single timelines.
+    avgOfHomogenousTimelineCorrelations = 0
+    if (len(listOfAllCorrelations) > 0):
+        avgOfHomogenousTimelineCorrelations = sum(listOfAllCorrelations) / len(listOfAllCorrelations)
+    if (not math.isnan(avgOfHomogenousTimelineCorrelations)):
+        avgOfHomogenousTimelineResultFileInfo.AppendEdge(valueName1, valueName2, str(avgOfHomogenousTimelineCorrelations))
 # End - GetCorrelationBetweenTwoVars
 
 
@@ -573,7 +606,7 @@ def GetAccuracyForSingleInputAndOutputPair(fullInputName, outputName,
     # of this program that crashed. In this case, we are running on a restarted
     # process, so do not waste time recomputing work that is already done.
     # Look for this pair in the result file
-    foundIt, resultStr = resultFileInfo.GetResultForInputOutputPair(fullInputName, outputName)
+    foundIt, resultStr = resultFileInfo.GetEdge(fullInputName, outputName)
     if (foundIt):
         return resultStr
     # End - if (foundIt):

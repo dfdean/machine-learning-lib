@@ -45,20 +45,12 @@
 ################################################################################
 import os
 import sys
-#import math
-#import random
-#from os.path import isfile
-#import decimal  # For float-to-string workaround
 from datetime import datetime
 import uuid as UUID
 
 import xmlTools as dxml
-#import tdfFile as tdf
-#import dataShow as DataShow
 import medHistogram as MedHistogram
 import groupingFile as GroupingFile
-
-MEDGRAPH_DEBUG         = True
 
 #------------------------------------------------
 # File Syntax
@@ -790,9 +782,6 @@ class MedGraphFile():
 
 
 
-
-
-
     #####################################################
     # GroupNodesIntoCliques
     #####################################################
@@ -899,7 +888,7 @@ class MedGraphFile():
 
 
 # End - class MedGraphFile
-
+################################################################################
 
 
 

@@ -277,12 +277,23 @@ TDF_TIME_GRANULARITY_DAYS       = 0
 TDF_TIME_GRANULARITY_SECONDS    = 1
 
 # Relations - these are used to describe a test relation
+VALUE_RELATION_NONE_ID = 0
 VALUE_RELATION_IN_RANGE_ID = 1
 VALUE_RELATION_EQUAL_ID = 2
 VALUE_RELATION_GREATER_THAN_ID = 3
 VALUE_RELATION_GREATER_THAN_EQUAL_ID = 4
 VALUE_RELATION_LESS_THAN_ID = 5
 VALUE_RELATION_LESS_THAN_EQUAL_ID = 6
+# Input and Output test relationship names
+VALUE_RELATION_IN_RANGE = "in"
+VALUE_RELATION_RANGE_SEPARATOR = ":"
+g_NameToRelationIDDict = {
+            "in": VALUE_RELATION_IN_RANGE_ID,
+            "gt": VALUE_RELATION_GREATER_THAN_ID,
+            "gte": VALUE_RELATION_GREATER_THAN_EQUAL_ID,
+            "lt": VALUE_RELATION_LESS_THAN_ID,
+            "lte": VALUE_RELATION_LESS_THAN_EQUAL_ID, 
+            "eq": VALUE_RELATION_EQUAL_ID }
 
 # When values - these specify when a condition must be met
 VALUE_WHEN_AT_DAY_ID = 1
@@ -3741,7 +3752,7 @@ class TDFFileReader():
     def CalculateTestResultValues(self, hintIndex, dayNum, valueName, relationID, value1, value2, whenTimeID):
         resultAtDay = TDF_INVALID_VALUE
         resultAfterDay = TDF_INVALID_VALUE
-        resultDay = -1
+        resultDay = dayNum
 
         # Use the hint to try to skip ahead to values for the day we are interested in.
         if (hintIndex >= 0):
@@ -3802,7 +3813,7 @@ class TDFFileReader():
             elif (TDF_INVALID_VALUE != resultAfterDay):
                 return resultAfterDay, resultDay, hintIndex
             else:
-                return TDF_INVALID_VALUE, -1, hintIndex
+                return TDF_INVALID_VALUE, resultDay, hintIndex
         # End - if (whenTimeID == VALUE_WHEN_AT_DAY_ID)
         # If we want the value after the end, then return that.
         # If we cannot, then try to return the value at the end.
@@ -3812,7 +3823,7 @@ class TDFFileReader():
             elif (TDF_INVALID_VALUE != resultAtDay):
                 return resultAtDay, resultDay, hintIndex
             else:
-                return TDF_INVALID_VALUE, -1, hintIndex
+                return TDF_INVALID_VALUE, resultDay, hintIndex
         # End - if (whenTimeID == VALUE_WHEN_AFTER_DAY_ID)
         else:   # if (whenTimeID == VALUE_WHEN_EVER_ID):
             if (TDF_INVALID_VALUE != resultAfterDay):
@@ -3820,10 +3831,10 @@ class TDFFileReader():
             elif (TDF_INVALID_VALUE != resultAtDay):
                 return resultAtDay, resultDay, hintIndex
             else:
-                return TDF_INVALID_VALUE, -1, hintIndex
+                return TDF_INVALID_VALUE, resultDay, hintIndex
         # End - if (whenTimeID == VALUE_WHEN_AFTER_DAY_ID)
 
-        return TDF_INVALID_VALUE, -1, hintIndex
+        return TDF_INVALID_VALUE, resultDay, hintIndex
     # End - CalculateTestResultValues()
 
 
@@ -3846,15 +3857,14 @@ class TDFFileReader():
                                             nameStem2, 
                                             valueOffset2, 
                                             functionObject2,
-                                            requirePropertyNameList,
-                                            requirePropertyRelationList,
-                                            requirePropertyValueList):
-        numRequireProperties = len(requirePropertyNameList)
+                                            criteriaVarName, criteriaRelationID, criteriaValue1, criteriaValue2, 
+                                            minDaysInCriteria):
         timeCodeWithSavedValues = TDF_INVALID_VALUE
         value1FromCurrentTimeCode = TDF_INVALID_VALUE
         value2FromCurrentTimeCode = TDF_INVALID_VALUE
         valueList1 = []
         valueList2 = []
+        dayNumList = []
         matchingRangeDay = -1
 
         # Initialize the time function objects
@@ -3873,12 +3883,14 @@ class TDFFileReader():
             # If it has both values, then save them to the result list.
             if (timeCodeWithSavedValues != currentTimeCode):
                 if ((value1FromCurrentTimeCode != TDF_INVALID_VALUE) and (value2FromCurrentTimeCode != TDF_INVALID_VALUE)):
+                    # Make sure it is not a dup of the previous value.
                     numSavedValues = len(valueList1)
                     if ((numSavedValues == 0) 
                             or (valueList1[numSavedValues - 1] != value1FromCurrentTimeCode) 
                             or (valueList2[numSavedValues - 1] != value2FromCurrentTimeCode)):
                         valueList1.append(value1FromCurrentTimeCode)
                         valueList2.append(value2FromCurrentTimeCode)
+                        dayNumList.append(timeCodeWithSavedValues)
                 # End - if ((value1FromCurrentTimeCode != TDF_INVALID_VALUE) and (value2FromCurrentTimeCode != TDF_INVALID_VALUE)):
 
                 value1FromCurrentTimeCode = TDF_INVALID_VALUE
@@ -3887,13 +3899,22 @@ class TDFFileReader():
             # End - if (dayNumWithSavedValues != currentTimeCode)
 
             # Check if this is a timeline entry we care about.
-            if (numRequireProperties > 0):
-                fMeetsCriteria = self.CheckIfCurrentTimeMeetsCriteria(requirePropertyRelationList,
-                                                                    requirePropertyNameList,
-                                                                    requirePropertyValueList,
-                                                                    timelineEntry)
-                if not fMeetsCriteria:
+            if ((VALUE_RELATION_NONE_ID != criteriaRelationID) and (criteriaVarName != "")):
+                foundcriteriaVar, criteriaVal, matchingRangeDay = self.GetNamedValueFromTimeline(criteriaVarName, 
+                                                                       0, 0, -1, None, timeLineIndex, matchingRangeDay)
+                if (not foundcriteriaVar):
                     continue
+
+                fMeetsCriteria = False
+                if (((criteriaRelationID == VALUE_RELATION_IN_RANGE_ID) and (criteriaVal >= criteriaValue1) and (criteriaVal <= criteriaValue2))
+                    or ((criteriaRelationID == VALUE_RELATION_EQUAL_ID) and (criteriaVal == criteriaValue1))
+                    or ((criteriaRelationID == VALUE_RELATION_GREATER_THAN_ID) and (criteriaVal > criteriaValue1))
+                    or ((criteriaRelationID == VALUE_RELATION_GREATER_THAN_EQUAL_ID) and (criteriaVal >= criteriaValue1))
+                    or ((criteriaRelationID == VALUE_RELATION_LESS_THAN_ID) and (criteriaVal < criteriaValue1))
+                    or ((criteriaRelationID == VALUE_RELATION_LESS_THAN_EQUAL_ID) and (criteriaVal <= criteriaValue1))):
+                    fMeetsCriteria = True
+                if not fMeetsCriteria:
+                    break
             # End - if (numRequireProperties > 0):
 
             # Find the values we are looking for.
@@ -3919,13 +3940,25 @@ class TDFFileReader():
 
         # If the last day has both values, then save them to the result list.
         if ((value1FromCurrentTimeCode != TDF_INVALID_VALUE) and (value2FromCurrentTimeCode != TDF_INVALID_VALUE)):
+            # Make sure it is not a dup of the previous value.
             numSavedValues = len(valueList1)
             if ((numSavedValues == 0) 
                     or (valueList1[numSavedValues - 1] != value1FromCurrentTimeCode) 
                     or (valueList2[numSavedValues - 1] != value2FromCurrentTimeCode)):
                 valueList1.append(value1FromCurrentTimeCode)
                 valueList2.append(value2FromCurrentTimeCode)
+                dayNumList.append(timeCodeWithSavedValues)
         # End - if ((value1FromCurrentTimeCode != TDF_INVALID_VALUE) and (value2FromCurrentTimeCode != TDF_INVALID_VALUE)):
+
+        if (minDaysInCriteria > 0):
+            numValues = len(dayNumList)
+            if (numValues > 0):
+                daySpan = dayNumList[numValues - 1] - dayNumList[0]
+                if (daySpan < minDaysInCriteria):
+                    valueList1 = []
+                    valueList2 = []
+            # End - if (numValues > 0)
+        # End - if (minDaysInCriteria > 0):
 
         return valueList1, valueList2
     # End - GetSyncedPairOfValueListsForCurrentTimeline()
@@ -4097,6 +4130,76 @@ def TDF_ParseOneVariableName(valueName):
 
     return labInfo, valueName, valueOffsetStartRange, valueOffsetStopRange, valueOffsetRangeOption, functionName
 # End - TDF_ParseOneVariableName
+
+
+
+
+
+
+
+#####################################################
+#
+# [TDF_ParseCriteriaString]
+#
+# This returns:
+#   fFoundIt, varName, relationID, value1, value2
+#####################################################
+def TDF_ParseCriteriaString(criteriaStr):
+    fValid = False
+    varName = ""
+    relation = ""
+    relationID = VALUE_RELATION_NONE_ID
+    value1 = TDF_INVALID_VALUE
+    value2 = TDF_INVALID_VALUE
+
+    if (criteriaStr == ""):
+        return False, "", VALUE_RELATION_NONE_ID, TDF_INVALID_VALUE, TDF_INVALID_VALUE
+
+    partsList = criteriaStr.split(" ")
+    if (len(partsList) < 3):
+        return False, "", VALUE_RELATION_NONE_ID, TDF_INVALID_VALUE, TDF_INVALID_VALUE
+    # Case-normalize the relation for comparisons, but leave the variable name case-sensitive.
+    varName = partsList[0].lstrip().rstrip()
+    relationStr = partsList[1].lstrip().rstrip().lower()
+    valueStr = partsList[2].lstrip().rstrip()
+
+    if (relationStr not in g_NameToRelationIDDict):
+        return False, "", VALUE_RELATION_NONE_ID, TDF_INVALID_VALUE, TDF_INVALID_VALUE
+    relationID = g_NameToRelationIDDict[relationStr]
+
+    #################
+    # Conditions may be "foo GT x" or else "foo in x:y". This affects how we parse
+    # the value.
+    if (relationID == VALUE_RELATION_IN_RANGE_ID):
+        if (VALUE_RELATION_RANGE_SEPARATOR not in valueStr):
+            return False, "", VALUE_RELATION_NONE_ID, TDF_INVALID_VALUE, TDF_INVALID_VALUE
+
+        valPartsList = valueStr.split(VALUE_RELATION_RANGE_SEPARATOR)
+        if (len(valPartsList) < 2):
+            return False, "", VALUE_RELATION_NONE_ID, TDF_INVALID_VALUE, TDF_INVALID_VALUE
+
+        try:
+            value1 = float(valPartsList[0])
+        except Exception:
+            return False, "", VALUE_RELATION_NONE_ID, TDF_INVALID_VALUE, TDF_INVALID_VALUE
+
+        try:
+            value2 = float(valPartsList[1])
+        except Exception:
+            return False, "", VALUE_RELATION_NONE_ID, TDF_INVALID_VALUE, TDF_INVALID_VALUE
+    #################
+    else:   # if (relationID != VALUE_RELATION_IN_RANGE_ID):
+        try:
+            value1 = float(valueStr)
+        except Exception:
+            return False, "", VALUE_RELATION_NONE_ID, TDF_INVALID_VALUE, TDF_INVALID_VALUE
+
+    return True, varName, relationID, value1, value2
+# End of TDF_ParseCriteriaString
+
+
+
+
 
 
 

@@ -1,6 +1,6 @@
 ####################################################################################
 # 
-# Copyright (c) 2025 Dawson Dean
+# Copyright (c) 2025-2026 Dawson Dean
 # 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -63,6 +63,7 @@ import xmlTools as dxml
 import tdfFile as tdf
 import medGraph as MedGraph
 import medHistogram as MedHistogram
+import tdfTimeFunctions as timefunc
 
 TVMATRIX_DEBUG = True
 
@@ -696,7 +697,7 @@ class TimeValueMatrix():
                 if (len(entryPartStrList) < 2):
                     continue
 
-                dayNum, secInDay = tdf.TDF_ParseTimeStampIntoDaysSecs(entryPartStrList[0])
+                dayNum, secInDay = tdf.TDF_ParseTimeStamp(entryPartStrList[0])
                 dayNumList[entryNum] = dayNum
                 secNumList[entryNum] = secInDay
                 valueList[entryNum] = float(entryPartStrList[1])
@@ -1049,7 +1050,7 @@ class TimeValueMatrix():
     # For example, it will take list of absolute timestamps and create a list of 
     # relative time differences.
     #####################################################
-    def MakeDerivedValueList(self, srcTVMatrix, opName):
+    def MakeDerivedValueList(self, srcTVMatrix, opName, timeFunction):
         if (len(srcTVMatrix.timelineList) <= 0):
             return
 
@@ -1071,11 +1072,15 @@ class TimeValueMatrix():
                 if (numEntriesInSrcRow <= 1):
                     continue
 
+
             # Make the dest row
             if (opName in [TV_MATRIX_DERIVED_TABLE_OP_DELTA, TV_MATRIX_DERIVED_TABLE_OP_VELOCITY, TV_MATRIX_DERIVED_TABLE_OP_DELTA_DAYS]):
                 numEntriesInDestRow = numEntriesInSrcRow - 1
             elif (opName in [TV_MATRIX_DERIVED_TABLE_OP_TOTAL_DELTA, TV_MATRIX_DERIVED_TABLE_OP_TOTAL_VELOCITY]):
                 numEntriesInDestRow = 1
+            elif (timeFunction is not None):
+                numEntriesInDestRow = numEntriesInSrcRow
+                timeFunction.Reset()
 
             destDayNumList = [0] * numEntriesInDestRow
             destSecNumList = [0] * numEntriesInDestRow 
@@ -1098,6 +1103,16 @@ class TimeValueMatrix():
                         else:
                             destValueList[destEntryNum] = 0
                 # End - for destEntryNum in range(numEntriesInDestRow):
+
+            ################################
+            elif (timeFunction is not None):
+                for destEntryNum in range(numEntriesInDestRow):
+                    destDayNumList[destEntryNum] = srcDayNumList[destEntryNum]
+                    destSecNumList[destEntryNum] = srcSecNumList[destEntryNum]
+                    destValueList[destEntryNum] = timeFunction.ComputeNewValue(srcValueList[destEntryNum], srcDayNumList[destEntryNum], srcSecNumList[destEntryNum])
+                # End - for destEntryNum in range(numEntriesInDestRow):
+            # End - elif (timeFunction is not None):
+
             ################################
             elif (opName in [TV_MATRIX_DERIVED_TABLE_OP_TOTAL_DELTA, TV_MATRIX_DERIVED_TABLE_OP_TOTAL_VELOCITY]):            
                 destDayNumList[0] = srcDayNumList[numEntriesInSrcRow - 1]
@@ -1112,11 +1127,15 @@ class TimeValueMatrix():
                     else:
                         destValueList[0] = 0
 
+
+
+
             # Assemble the lists into a single timeline entry
             timelineEntry = {'ID': srcListID, 'd': destDayNumList, 's': destSecNumList, 'v': destValueList, 'p': copy.deepcopy(linePropsDict)}
             self.timelineList.append(timelineEntry)
         # End - for srcRow in srcTVMatrix.timelineList:
     # End - MakeDerivedValueList
+
 
 
 
@@ -2370,9 +2389,23 @@ def MakeTimeValueMatrixFromSelectionsOfTDF(tvMatrixFilePathName, valueName, sele
 ################################################################################
 def CreateDerivedTimeValueMatrix(srcTVMatrix, opName):
     newTVMatrix = TimeValueMatrix()
-    newTVMatrix.MakeDerivedValueList(srcTVMatrix, opName)
+    newTVMatrix.MakeDerivedValueList(srcTVMatrix, opName, None)
     return newTVMatrix
 # End - CreateDerivedTimeValueMatrix
+
+
+################################################################################
+# 
+################################################################################
+def CreateDerivedTimeValueMatrixWithTimeFunction(srcTVMatrix, functionName, valueName):
+    timeFunction = timefunc.CreateTimeValueFunction(functionName, tdf.TDF_TIME_GRANULARITY_DAYS, valueName)
+    if (timeFunction is None):
+        return None
+
+    newTVMatrix = TimeValueMatrix()
+    newTVMatrix.MakeDerivedValueList(srcTVMatrix, "", timeFunction)
+    return newTVMatrix
+# End - CreateDerivedTimeValueMatrixWithTimeFunction
 
 
 

@@ -1,6 +1,6 @@
 #####################################################################################
 # 
-# Copyright (c) 2020-2025 Dawson Dean
+# Copyright (c) 2020-2026 Dawson Dean
 # 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -479,23 +479,15 @@ def TDF_ConvertTimeStampToIntSeconds(timeStampStr):
 # [TDF_ConvertTimeToSeconds]
 #
 ################################################################################
-def TDF_ConvertTimeToSeconds(days, hours, minutes, seconds):
+def TDF_ConvertTimeToSeconds(days, seconds):
     # Add days in seconds
     result = (days * 24 * 60 * 60)
-
-    # Add hours in seconds
-    result += (hours * 60 * 60)
-
-    # Add minutes in seconds
-    result += (minutes * 60)
-
     # Add seconds if they are present - these are optional
     if (seconds > 0):
         result += seconds
 
     return result
 # End - TDF_ConvertTimeToSeconds
-
 
 
 
@@ -511,40 +503,6 @@ def TDF_ConvertTimeToSeconds(days, hours, minutes, seconds):
 def TDF_ParseTimeStamp(timeCode):
     if (timeCode == ""):
         TDF_Log("Error. TDF_ParseTimeStamp invalid str: " + timeCode)
-        return 0, 0, 0, 0
-
-    # This is days, hours, min
-    words = timeCode.split(':')
-    if (len(words) >= 4):
-        return int(words[0]), int(words[1]), int(words[2]), int(words[3])
-    elif (len(words) >= 3):
-        return int(words[0]), int(words[1]), int(words[2]), 0
-    elif (len(words) == 2):
-        secInDay = int(words[1])
-        minInDay = int(secInDay / 60)
-        secInDay = secInDay - (minInDay * 60)
-        hoursInDay = int(minInDay / 60)
-        minInDay = minInDay - (hoursInDay * 60)
-        return int(words[0]), hoursInDay, minInDay, secInDay
-    elif (len(words) == 1):
-        return int(words[0]), 0, 0, 0
-    else:
-        return 0, 0, 0, 0
-# End - TDF_ParseTimeStamp
-
-
-
-
-################################################################################
-# 
-# [TDF_ParseTimeStampIntoDaysSecs]
-#
-# This parses a formatted string that is a time code and converts it to separate 
-# integers
-################################################################################
-def TDF_ParseTimeStampIntoDaysSecs(timeCode):
-    if (timeCode == ""):
-        TDF_Log("Error. TDF_ParseTimeStampIntoDaysSecs invalid str: " + timeCode)
         return 0, 0
 
     # This is days, hours, min
@@ -568,7 +526,7 @@ def TDF_ParseTimeStampIntoDaysSecs(timeCode):
         return int(words[0]), 0
     else:
         return 0, 0
-# End - TDF_ParseTimeStampIntoDaysSecs
+# End - TDF_ParseTimeStamp
 
 
 
@@ -1212,8 +1170,8 @@ class TDFFileReader():
 
             if (self.allValuesFunctionNameList[index] != ""):
                 self.allValuesFunctionObjectList[index] = timefunc.CreateTimeValueFunction(
-                                                                        self.TimeGranularity,
                                                                         self.allValuesFunctionNameList[index],
+                                                                        self.TimeGranularity,
                                                                         self.allValueVarNameList[index])
                 if (self.allValuesFunctionObjectList[index] is None):
                     print("\n\n\nERROR!! TDFFileReader::ParseVariableList Undefined function: " 
@@ -1423,7 +1381,7 @@ class TDFFileReader():
         for timeLineIndex in range(self.LastTimeLineIndex + 1):
             timelineEntry = self.CompiledTimeline[timeLineIndex]
             currentTimeCode = timelineEntry['TimeCode']
-            currentDay, secs = TDF_ParseTimeStampIntoDaysSecs(currentTimeCode)
+            currentDay, secs = TDF_ParseTimeStamp(currentTimeCode)
             latestValues = timelineEntry['data']
 
             if ((fOnlyOneValuePerTimeEntry) and (prevDayNum == currentDay) and (prevDayDict is not None)):
@@ -2050,8 +2008,6 @@ class TDFFileReader():
         # Some XML nodes may have out of order dates.
         # Probably from an admit order, which is dated earlier than the first labs of the admission.
         prevDateDays = TDF_INVALID_VALUE
-        prevDateHours = TDF_INVALID_VALUE
-        prevDateMinutes = TDF_INVALID_VALUE
         prevDateSeconds = TDF_INVALID_VALUE
         #<> End
 
@@ -2073,16 +2029,12 @@ class TDFFileReader():
             # Get the timestamp for this XML node.
             timeStampStr = currentNode.getAttribute("T")
             if ((timeStampStr is not None) and (timeStampStr != "")):
-                labDateDays, labDateHours, labDateMins, labDateSecs = TDF_ParseTimeStamp(timeStampStr)
+                labDateDays, labDateSecs = TDF_ParseTimeStamp(timeStampStr)
                 prevDateDays = labDateDays
-                prevDateHours = labDateHours
-                prevDateMinutes = labDateMins
                 prevDateSeconds = labDateSecs
             else:
                 # Just copy the old timestamp forward.
                 labDateDays = prevDateDays
-                labDateHours = prevDateHours
-                labDateMins = prevDateMinutes
                 labDateSecs = prevDateSeconds
 
             # Now calculate the time code. The actual value depends on the granularity of
@@ -2090,7 +2042,7 @@ class TDFFileReader():
             if (self.TimeGranularity == TDF_TIME_GRANULARITY_DAYS):
                 currentTimeCode = labDateDays
             else:                
-                currentTimeCode = TDF_ConvertTimeToSeconds(labDateDays, labDateHours, labDateMins, labDateSecs)
+                currentTimeCode = TDF_ConvertTimeToSeconds(labDateDays, labDateSecs)
 
             dataClass = ""
             if (nodeType == "d"):
@@ -2117,7 +2069,7 @@ class TDFFileReader():
             else:
                 # Otherwise, we are starting a new timeline entry.
                 # Make a new time slot. 
-                timelineEntry = {'TimeCode': currentTimeCode, 'Day': labDateDays, 'Sec': labDateSecs + (labDateMins * 60) + (labDateHours * 3600)}
+                timelineEntry = {'TimeCode': currentTimeCode, 'Day': labDateDays, 'Sec': labDateSecs}
 
                 # This is a bit dangerous/weird:
                 # It is nice to make the dayNum and SecInDay available without having to rederive it
@@ -2126,7 +2078,7 @@ class TDFFileReader():
                 # However, this means the values in each entry will be different depending on the time granularity.
                 #if (self.TimeGranularity != TDF_TIME_GRANULARITY_DAYS):
                 #timelineEntry['Day'] = labDateDays
-                #timelineEntry['Sec'] = labDateSecs + (labDateMins * 60) + (labDateHours * 3600)
+                #timelineEntry['Sec'] = labDateSecs
 
                 # Note: This may make a new timeline entry before we have confirmed that there is new data.
                 # It ensures that we will include days for meds only without labs
@@ -3304,11 +3256,9 @@ class TDFFileReader():
             if (functionObject is None):
                 return True, result, currentTimeCode
             else:
-                timeCodeInDays = int(currentTimeCode / (60 * 60 * 24))
-                timeCodeInHrs = int(currentTimeCode / (60 * 60)) - (timeCodeInDays * 24)
-                timeCodeInMin = int(currentTimeCode / 60) - ((timeCodeInDays * 24 * 60) + (timeCodeInHrs * 60))
-                timeCodeInSecs = currentTimeCode - ((timeCodeInDays * 60 * 60 * 24) + (timeCodeInHrs * 60 * 60) + (timeCodeInMin * 60))
-                result = functionObject.ComputeNewValue(result, timeCodeInDays, timeCodeInHrs, timeCodeInMin, timeCodeInSecs)
+                timeCodeInDays = timelineEntry['Day']
+                timeCodeInSecs = timelineEntry['Sec']
+                result = functionObject.ComputeNewValue(result, timeCodeInDays, timeCodeInSecs)
 
                 # Do not panic, this is not a bug or a real error.
                 # This normally just means the function may just not have enough historical
@@ -3914,7 +3864,7 @@ class TDFFileReader():
                     or ((criteriaRelationID == VALUE_RELATION_LESS_THAN_EQUAL_ID) and (criteriaVal <= criteriaValue1))):
                     fMeetsCriteria = True
                 if not fMeetsCriteria:
-                    break
+                    continue
             # End - if (numRequireProperties > 0):
 
             # Find the values we are looking for.
@@ -3932,9 +3882,9 @@ class TDFFileReader():
             # Save valid values.
             # BE CAREFUL! Some values, like drug doses, may be 0 on days the med is not given.
             # In other words, 0 should be treated like TDF_INVALID_VALUE and ignored.
-            if (foundNewValue1 and (value1 not in (TDF_INVALID_VALUE, 0))):
+            if (foundNewValue1 and (value1 != TDF_INVALID_VALUE)):
                 value1FromCurrentTimeCode = value1
-            if (foundNewValue2 and (value2 not in (TDF_INVALID_VALUE, 0))):
+            if (foundNewValue2 and (value2 != TDF_INVALID_VALUE)):
                 value2FromCurrentTimeCode = value2
         # End - for timeLineIndex in range(self.LastTimeLineIndex + 1)
 
@@ -4280,7 +4230,7 @@ def CopyTimelineWithinTimeBounds(origTimelineNode, firstDayNum, lastDayNum):
         labDateDays = -1
         timeStampStr = currentNode.getAttribute("T")
         if ((timeStampStr is not None) and (timeStampStr != "")):
-            labDateDays, labDateHours, labDateMins, labDateSecs = TDF_ParseTimeStamp(timeStampStr)
+            labDateDays, labDateSecs = TDF_ParseTimeStamp(timeStampStr)
 
         if ((labDateDays >= 0) and (labDateDays >= firstDayNum) and (labDateDays <= lastDayNum)):
             dxml.XMLTools_AppendCopyOfChildNodeWithTextOnly(copyTimelineNode, currentNode)

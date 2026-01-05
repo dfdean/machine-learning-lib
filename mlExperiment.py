@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 ################################################################################
 #
-# Copyright (c) 2023-2025 Dawson Dean
+# Copyright (c) 2023-2026 Dawson Dean
 # 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -493,13 +493,13 @@ def GetCorrelationBetweenTwoVars(
         print("!Error! GetCorrelationBetweenTwoVars Cannot parse variable: " + valueName2)
         return
     if (functionName1 != ""):
-        functionObject1 = timefunc.CreateTimeValueFunction(functionName1, nameStem1)
+        functionObject1 = timefunc.CreateTimeValueFunction(functionName1, tdf.TDF_TIME_GRANULARITY_DAYS, nameStem1)
         if (functionObject1 is None):
             print("\n\n\nERROR!! GetCorrelationBetweenTwoVars Undefined function1: " + functionName1)
             sys.exit(0)
             return
     if (functionName2 != ""):
-        functionObject2 = timefunc.CreateTimeValueFunction(functionName2, nameStem2)
+        functionObject2 = timefunc.CreateTimeValueFunction(functionName2, tdf.TDF_TIME_GRANULARITY_DAYS, nameStem2)
         if (functionObject2 is None):
             print("\n\n\nERROR!! GetCorrelationBetweenTwoVars Undefined function2: " + functionName2)
             sys.exit(0)
@@ -626,14 +626,14 @@ def GetAccuracyForSingleInputAndOutputPair(fullInputName, outputName,
 
     inputFunctionObject = None
     if (inputFunctionName != ""):
-        inputFunctionObject = timefunc.CreateTimeValueFunction(inputFunctionName, inputNameStem)
+        inputFunctionObject = timefunc.CreateTimeValueFunction(inputFunctionName, tdf.TDF_TIME_GRANULARITY_DAYS, inputNameStem)
         if (inputFunctionObject is None):
             print("GetAccuracyForSingleInputAndOutputPair Error! Undefined function: " + inputFunctionName)
             sys.exit(0)
 
     outputFunctionObject = None
     if (outputFunctionName != ""):
-        outputFunctionObject = timefunc.CreateTimeValueFunction(outputFunctionName, outputName)
+        outputFunctionObject = timefunc.CreateTimeValueFunction(outputFunctionName, tdf.TDF_TIME_GRANULARITY_DAYS, outputName)
         if (outputFunctionObject is None):
             print("GetAccuracyForSingleInputAndOutputPair Error! Undefined function: " + outputFunctionName)
             sys.exit(0)

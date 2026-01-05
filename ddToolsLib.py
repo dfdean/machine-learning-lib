@@ -1,6 +1,6 @@
 ################################################################################
 # 
-# Copyright (c) 2020-2024 Dawson Dean
+# Copyright (c) 2020-2026 Dawson Dean
 # 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -321,6 +321,7 @@ def DDTools_DeleteDirContents(dirPathName):
 #
 ################################################################################
 def DDTools_MkDir(dirPathName):
+    #if (not os.path.exists(dirPathName)):
     if (os.path.isdir(dirPathName)):
         pass
     else:
@@ -328,6 +329,8 @@ def DDTools_MkDir(dirPathName):
             os.mkdir(dirPathName)
         except Exception:
             pass
+
+    # shutil.rmtree(dirPathName)
 
     try:
         os.chmod(dirPathName, 0o777)

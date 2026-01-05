@@ -1,6 +1,6 @@
 #####################################################################################
 # 
-# Copyright (c) 2022-2025 Dawson Dean
+# Copyright (c) 2022-2026 Dawson Dean
 # 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -31,7 +31,7 @@
 #
 # The functions are identified by Case-INsensitive names:
 #
-# "delta" - Returns a float, the delta between current and most recent previous value
+# "delta" - Returns a float, theComputeNewValueComputeNewValue delta between current and most recent previous value
 # It also allows you to specify how long a timespan to use for the rate:
 #       delta - the current value and the most recent previous value
 #       delta3 - the current value and a previous value from 3 days before
@@ -175,7 +175,7 @@ class CTimeSeries():
         if (self.TimeGranularity == tdf.TDF_TIME_GRANULARITY_DAYS):
             timeCode = timeInDays
         else:                
-            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMin, timeSecs)
+            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeSecs)
 
         newQueueEntry = {'v': value, 't': timeCode}
         self.ValueQueue.append(newQueueEntry)
@@ -337,11 +337,11 @@ class CGenericTimeValue():
     # [CGenericTimeValue::ComputeNewValue]
     #
     #####################################################
-    def ComputeNewValue(self, value, timeInDays, timeHours, timeMinutes, timeSeconds):
+    def ComputeNewValue(self, value, timeInDays, timeSeconds):
         if (self.TimeGranularity == tdf.TDF_TIME_GRANULARITY_DAYS):
             timeCode = timeInDays
         else:                
-            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMinutes, timeSeconds)
+            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeSeconds)
 
         newValInfo = {'v': value, 't': timeCode}
         self.PrevValue = self.CurrentValue
@@ -402,11 +402,11 @@ class CAccelerationValue():
     # [CAccelerationValue::ComputeNewValue]
     #
     #####################################################
-    def ComputeNewValue(self, value, timeInDays, timeHours, timeMinutes, timeSeconds):
+    def ComputeNewValue(self, value, timeInDays, timeSeconds):
         if (self.TimeGranularity == tdf.TDF_TIME_GRANULARITY_DAYS):
             timeCode = timeInDays
         else:                
-            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMinutes, timeSeconds)
+            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeSeconds)
 
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.
@@ -500,11 +500,11 @@ class CDeltaValue():
     # [CDeltaValue::ComputeNewValue]
     #
     #####################################################
-    def ComputeNewValue(self, value, timeInDays, timeHours, timeMinutes, timeSeconds):
+    def ComputeNewValue(self, value, timeInDays, timeSeconds):
         if (self.TimeGranularity == tdf.TDF_TIME_GRANULARITY_DAYS):
             timeCode = timeInDays
         else:                
-            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMinutes, timeSeconds)
+            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeSeconds)
 
         # Pop any values that are older than we need.
         while (len(self.ValueQueue) > 0):
@@ -578,11 +578,11 @@ class CSum():
     # [CRunningAvgValue::ComputeNewValue]
     #
     #####################################################
-    def ComputeNewValue(self, value, timeInDays, timeHours, timeMinutes, timeSeconds):
+    def ComputeNewValue(self, value, timeInDays, timeSeconds):
         if (self.TimeGranularity == tdf.TDF_TIME_GRANULARITY_DAYS):
             timeCode = timeInDays
         else:                
-            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMinutes, timeSeconds)
+            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeSeconds)
 
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.
@@ -652,11 +652,11 @@ class CRunningAvgValue():
     # [CRunningAvgValue::ComputeNewValue]
     #
     #####################################################
-    def ComputeNewValue(self, value, timeInDays, timeHours, timeMinutes, timeSeconds):
+    def ComputeNewValue(self, value, timeInDays, timeSeconds):
         if (self.TimeGranularity == tdf.TDF_TIME_GRANULARITY_DAYS):
             timeCode = timeInDays
         else:                
-            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMinutes, timeSeconds)
+            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeSeconds)
 
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.
@@ -726,11 +726,11 @@ class CRateValue():
     # [CRateValue::ComputeNewValue]
     #
     #####################################################
-    def ComputeNewValue(self, value, timeInDays, timeHours, timeMinutes, timeSeconds):
+    def ComputeNewValue(self, value, timeInDays, timeSeconds):
         if (self.TimeGranularity == tdf.TDF_TIME_GRANULARITY_DAYS):
             timeCode = timeInDays
         else:                
-            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMinutes, timeSeconds)
+            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeSeconds)
 
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.
@@ -754,10 +754,7 @@ class CRateValue():
         deltaValue = -1
         deltaTime = -1
         for entry in self.ValueQueue:
-            currentDeltaValue = value - entry['v']
-            if (currentDeltaValue < 0):
-                currentDeltaValue = -currentDeltaValue
-
+            currentDeltaValue = abs(value - entry['v'])
             if ((deltaValue == -1) or (currentDeltaValue > deltaValue)):
                 deltaValue = currentDeltaValue
                 deltaTime = timeCode - entry['t']
@@ -823,9 +820,9 @@ class CRateCrossValue():
     # [CRateCrossValue::ComputeNewValue]
     #
     #####################################################
-    def ComputeNewValue(self, value, timeInDays, timeHours, timeMinutes, timeSeconds):
-        shortRateVal = self.shortRate.ComputeNewValue(value, timeInDays, timeHours, timeMinutes, timeSeconds)
-        longRateVal = self.longRate.ComputeNewValue(value, timeInDays, timeHours, timeMinutes, timeSeconds)
+    def ComputeNewValue(self, value, timeInDays, timeSeconds):
+        shortRateVal = self.shortRate.ComputeNewValue(value, timeInDays, timeSeconds)
+        longRateVal = self.longRate.ComputeNewValue(value, timeInDays, timeSeconds)
         if ((shortRateVal == tdf.TDF_INVALID_VALUE) or (longRateVal == tdf.TDF_INVALID_VALUE)):
             return tdf.TDF_INVALID_VALUE
 
@@ -879,11 +876,11 @@ class CBollingerValue():
     # [CBollingerValue::ComputeNewValue]
     #
     #####################################################
-    def ComputeNewValue(self, value, timeInDays, timeHours, timeMinutes, timeSeconds):
+    def ComputeNewValue(self, value, timeInDays, timeSeconds):
         if (self.TimeGranularity == tdf.TDF_TIME_GRANULARITY_DAYS):
             timeCode = timeInDays
         else:                
-            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMinutes, timeSeconds)
+            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeSeconds)
 
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.
@@ -969,11 +966,11 @@ class CRangeValue():
     # [CRangeValue::ComputeNewValue]
     #
     #####################################################
-    def ComputeNewValue(self, value, timeInDays, timeHours, timeMinutes, timeSeconds):
+    def ComputeNewValue(self, value, timeInDays, timeSeconds):
         if (self.TimeGranularity == tdf.TDF_TIME_GRANULARITY_DAYS):
             timeCode = timeInDays
         else:                
-            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMinutes, timeSeconds)
+            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeSeconds)
 
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.
@@ -1068,11 +1065,11 @@ class CPercentChangeValue():
     # [CPercentChangeValue::ComputeNewValue]
     #
     #####################################################
-    def ComputeNewValue(self, value, timeInDays, timeHours, timeMinutes, timeSeconds):
+    def ComputeNewValue(self, value, timeInDays, timeSeconds):
         if (self.TimeGranularity == tdf.TDF_TIME_GRANULARITY_DAYS):
             timeCode = timeInDays
         else:                
-            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMinutes, timeSeconds)
+            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeSeconds)
 
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.
@@ -1160,11 +1157,11 @@ class CThresholdValue():
     # [CThresholdValue::ComputeNewValue]
     #
     #####################################################
-    def ComputeNewValue(self, value, timeInDays, timeHours, timeMinutes, timeSeconds):
+    def ComputeNewValue(self, value, timeInDays, timeSeconds):
         if (self.TimeGranularity == tdf.TDF_TIME_GRANULARITY_DAYS):
             timeCode = timeInDays
         else:                
-            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMinutes, timeSeconds)
+            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeSeconds)
 
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.
@@ -1258,11 +1255,11 @@ class CVolatilityValue():
     # [CVolatilityValue::ComputeNewValue]
     #
     #####################################################
-    def ComputeNewValue(self, value, timeInDays, timeHours, timeMinutes, timeSeconds):
+    def ComputeNewValue(self, value, timeInDays, timeSeconds):
         if (self.TimeGranularity == tdf.TDF_TIME_GRANULARITY_DAYS):
             timeCode = timeInDays
         else:                
-            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeHours, timeMinutes, timeSeconds)
+            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeSeconds)
 
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.
@@ -1284,24 +1281,130 @@ class CVolatilityValue():
         prevValue = tdf.TDF_INVALID_VALUE
         for entry in self.ValueQueue:
             currentValue = entry['v']
-
             if (prevValue != tdf.TDF_INVALID_VALUE):
-                currentChange = currentValue - prevValue
-                if (currentChange < 0):
-                    currentChange = -currentChange
-
-                totalChange += currentChange
-            # End - if (prevValue != tdf.TDF_INVALID_VALUE):
+                totalChange += abs(currentValue - prevValue)
 
             prevValue = currentValue
         # End - for entry in self.ValueQueue:
 
-        return totalChange
+        numChanges = len(self.ValueQueue) - 1
+        if (numChanges <= 0):
+            return 0
+        return (totalChange / numChanges)
     # End of ComputeNewValue
 
 # End - class CVolatilityValue
 
 
+
+
+
+
+
+
+
+
+################################################################################
+#
+#
+################################################################################
+class CRSIValue():
+    #####################################################
+    # Constructor - This method is part of any class
+    #####################################################
+    def __init__(self, timeGranularity, numDays):
+        self.TimeGranularity = timeGranularity
+        self.MaxTimeInQueue = numDays
+
+        self.percentChangeList = [0.0] * numDays
+        self.percentGainList = [0.0] * numDays
+        self.percentLossList = [0.0] * numDays
+
+        self.Reset()
+    # End - __init__
+
+
+    #####################################################
+    # Destructor - This method is part of any class
+    #####################################################
+    def __del__(self):
+        return
+
+
+    #####################################################
+    #####################################################
+    def Reset(self):
+        self.ValueQueue = deque()
+    # End -  Reset
+
+
+    #####################################################
+    #
+    # [CRSIValue::ComputeNewValue]
+    #
+    #####################################################
+    def ComputeNewValue(self, value, timeInDays, timeSeconds):
+        if (self.TimeGranularity == tdf.TDF_TIME_GRANULARITY_DAYS):
+            timeCode = timeInDays
+        else:                
+            timeCode = tdf.TDF_ConvertTimeToSeconds(timeInDays, timeSeconds)
+
+        # Prune old items that are now more than N days before the new item.
+        # This will leave only items with the past N days in the list.
+        while (len(self.ValueQueue) > 0):
+            if ((timeCode - self.ValueQueue[0]['t']) > self.MaxTimeInQueue):
+                #if ((self.MinValue == self.ValueQueue[0]['v']) or (self.MaxValue == self.ValueQueue[0]['v'])):
+                self.ValueQueue.popleft()
+            else:
+                break
+        # End - while (True):
+
+        # Items are added to the list as LIFO, so oldest item is index [0] and
+        # new items are added to the right
+        # We visit items in increasing time order, so the list is always appended with
+        # newer items on the right.
+        self.ValueQueue.append({'v': value, 't': timeCode})
+
+        # Make a list of gains and losses
+        numValues = len(self.ValueQueue)
+        numValueChanges = numValues - 1
+        oldVal = self.ValueQueue[0]['v']
+        for index in range(1, numValues):
+            newVal = self.ValueQueue[index]['v']
+            if (oldVal != 0):
+                deltaVal = newVal - oldVal
+                percentChange = float(deltaVal / oldVal) * 100.0
+                self.percentChangeList[index - 1] = percentChange
+            oldVal = newVal
+        # End - for index in range(numValues):
+
+        for index in range(numValueChanges):
+            percentChange = self.percentChangeList[index]
+            if (percentChange > 0):
+                self.percentGainList[index] = percentChange
+                self.percentLossList[index] = 0
+            else:
+                self.percentGainList[index] = 0
+                self.percentLossList[index] = -percentChange
+        # End - for index in range(numValueChanges):
+
+        if (numValueChanges > 0):
+            avgPercentGain = sum(self.percentGainList) / numValueChanges
+            avgPercentLoss = sum(self.percentLossList) / numValueChanges
+        else:
+            avgPercentGain = 0
+            avgPercentLoss = 0
+
+        if (avgPercentLoss == 0):
+            relativeStrength = 0.0
+        else:
+            relativeStrength = avgPercentGain / avgPercentLoss
+        relativeStrengthIndex = 100.0 - (100.0 / (1.0 + relativeStrength))
+
+        return relativeStrengthIndex
+    # End of ComputeNewValue
+
+# End - class CRSIValue
 
 
 
@@ -1345,8 +1448,8 @@ class CIsStableValue():
     # [CIsStableValue::ComputeNewValue]
     #
     #####################################################
-    def ComputeNewValue(self, value, timeInDays, timeHours, timeMinutes, timeSeconds):
-        valRange = self.RangeVar.ComputeNewValue(value, timeInDays, timeHours, timeMinutes, timeSeconds)
+    def ComputeNewValue(self, value, timeInDays, timeSeconds):
+        valRange = self.RangeVar.ComputeNewValue(value, timeInDays, timeSeconds)
         if (valRange == tdf.TDF_INVALID_VALUE):
             return tdf.TDF_INVALID_VALUE
 
@@ -1589,6 +1692,24 @@ def CreateTimeValueFunction(functionNameStr, timeGranularity, varName):
         return CVolatilityValue(timeGranularity, 90)
     elif (functionNameStr == "vol180"):
         return CVolatilityValue(timeGranularity, 180)
+
+    ###############################################
+    elif (functionNameStr == "rsi"):
+        return CRSIValue(timeGranularity, 60)
+    elif (functionNameStr == "rsi3"):
+        return CRSIValue(timeGranularity, 3)
+    elif (functionNameStr == "rsi7"):
+        return CRSIValue(timeGranularity, 7)
+    elif (functionNameStr == "rsi14"):
+        return CRSIValue(timeGranularity, 14)
+    elif (functionNameStr == "rsi30"):
+        return CRSIValue(timeGranularity, 30)
+    elif (functionNameStr == "rsi60"):
+        return CRSIValue(timeGranularity, 60)
+    elif (functionNameStr == "rsi90"):
+        return CRSIValue(timeGranularity, 90)
+    elif (functionNameStr == "rsi180"):
+        return CRSIValue(timeGranularity, 180)
 
     ###############################################
     elif (functionNameStr == "bollup"):

@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 ################################################################################
 #
-# Copyright (c) 2025 Dawson Dean
+# Copyright (c) 2025-2026 Dawson Dean
 # 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -131,7 +131,7 @@ class MedGraphFile():
 
         self.WriteBuffer = ""
         self.NumBufferedLines = 0
-        self.MaxBufferedLines = 20
+        self.MaxBufferedLines = 1
         
         if (self.filePathName != ""):
             self.ReadFile()
@@ -556,7 +556,7 @@ class MedGraphFile():
         # End - while True
 
         # Fix the header
-        self.createDateStr = "Aug-22-2025 13:54"
+        self.createDateStr = "Jan-01-2026 13:00"
         self.descriptionStr = "Covariance Between All Rows in CKDTVMatrixFilteredTimelineLengthOver10.txt"
 
         # Write a new fixed header to the dest file

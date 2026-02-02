@@ -535,7 +535,7 @@ class TDFHistogram():
         elif (value > self.maxVal):
             value = self.maxVal
 
-        # Find which buck this value maps to
+        # Find which bucket this value maps to
         offset = value - self.minVal
         bucketNum = round(offset / self.ClassSize)
         if (bucketNum >= self.numClasses):
@@ -571,7 +571,7 @@ class TDFHistogram():
         elif (value > self.maxVal):
             value = self.maxVal
 
-        # Find which buck this value maps to
+        # Find which bucket this value maps to
         offset = value - self.minVal
         bucketNum = round(offset / self.ClassSize)
         if (bucketNum >= self.numClasses):

@@ -1662,7 +1662,7 @@ class MLEngine_RNNModel(nn.Module):
                 fAddMinibatchDimension, maxDaysWithZeroValue):
         if (False):
             print("\n\n Gnarly, Dude!")
-            sts.exit(0)
+            sys.exit(0)
             # Now we shift the tgt by one so with the <SOS> we predict the token at pos 1
             #y_input = trueResultTensor[:, :-1]
             #y_expected = trueResultTensor[:, 1:]
@@ -1681,7 +1681,7 @@ class MLEngine_RNNModel(nn.Module):
             # We could use the parameter batch_first=True, but our KDL version 
             # doesn't support it yet       
             inputTensor = inputTensor.permute(1, 0, 2)
-            y_input = y_input.permute(1, 0, 2)
+            #y_input = y_input.permute(1, 0, 2)
 
         h0 = torch.zeros(self.NumRecurrentLayers, 1, self.RecurrentStateSize)
         resultList = self.RNNModel(inputTensor, h0)
@@ -2253,13 +2253,13 @@ def MLEngine_DivideTimelineIntoSections(job, numReturnedDataSets, dayNumArray, c
             or ((relationID == tdf.VALUE_RELATION_EQUAL_ID) and (criteriaVal == value1))
             or ((relationID == tdf.VALUE_RELATION_GREATER_THAN_ID) and (criteriaVal > value1))
             or ((relationID == tdf.VALUE_RELATION_GREATER_THAN_EQUAL_ID) and (criteriaVal >= value1))
-            or ((relationID ==tdf. VALUE_RELATION_LESS_THAN_ID) and (criteriaVal < value1))
+            or ((relationID == tdf. VALUE_RELATION_LESS_THAN_ID) and (criteriaVal < value1))
             or ((relationID == tdf.VALUE_RELATION_LESS_THAN_EQUAL_ID) and (criteriaVal <= value1))):
             fMatchCriteria = True
 
         if (fMatchCriteria):
             if (currentSection is None):
-                currentSection = {'firstIndex': index, 'lastIndex': index }
+                currentSection = {'firstIndex': index, 'lastIndex': index}
             else:
                 currentSection['lastIndex'] = index
         # End - if (fMatchCriteria)
@@ -2941,7 +2941,7 @@ def MLEngine_TrainNeuralNet(job, partitionSize):
     # through the file in this sequence, but may shuffle it on later epochs.
     if (DEBUG_SKIP_PREFLIGHT):
         trivialPartition = {'start': 0, 'stop': 21011631, 'ptPriorityListStr': ""}
-        partitionList = [ trivialPartition ]
+        partitionList = [trivialPartition]
     else:
         job, partitionList = MLEngine_PreflightNeuralNet(job, partitionSize)
 

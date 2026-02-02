@@ -459,8 +459,8 @@ def GetCorrelationBetweenTwoVars(
                     valueName2,
                     criteriaStr,
                     minDaysInCriteria,
-                    heterogenousTimelineCorrelationResultFilePathName,
-                    avgOfHomogenousTimelineCorrelationResultFilePathName):
+                    heterogenousTimelineResultFileInfo,
+                    avgOfHomogenousTimelineResultFileInfo):
     listOfAllCorrelations = []
 
     fFoundIt, criteriaVarName, criteriaRelationID, criteriaValue1, criteriaValue2 = tdf.TDF_ParseCriteriaString(criteriaStr)
@@ -471,8 +471,6 @@ def GetCorrelationBetweenTwoVars(
     # of this program that crashed. In this case, we are running on a restarted
     # process, so do not waste time recomputing work that is already done.
     # Look for this pair in the result file
-    heterogenousTimelineResultFileInfo = MedGraph.MedGraph_OpenExistingGraph(heterogenousTimelineCorrelationResultFilePathName, "")
-    avgOfHomogenousTimelineResultFileInfo = MedGraph.MedGraph_OpenExistingGraph(avgOfHomogenousTimelineCorrelationResultFilePathName, "")
     foundIt1, heterogenousResultStr = heterogenousTimelineResultFileInfo.GetEdge(valueName1, valueName2)
     foundIt2, avgHomogenousResultStr = avgOfHomogenousTimelineResultFileInfo.GetEdge(valueName1, valueName2)
     if ((foundIt1) and (foundIt2)):

@@ -31,7 +31,7 @@
 #
 # The functions are identified by Case-INsensitive names:
 #
-# "delta" - Returns a float, theComputeNewValueComputeNewValue delta between current and most recent previous value
+# "delta" - Returns a float, the delta between current and most recent previous value
 # It also allows you to specify how long a timespan to use for the rate:
 #       delta - the current value and the most recent previous value
 #       delta3 - the current value and a previous value from 3 days before
@@ -283,7 +283,7 @@ class CTimeFunctionBaseClass():
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.
         while (len(self.ValueQueue) > 0):
-            if ((newTimeCode - self.ValueQueue[0]['t']) > self.MaxTimeInQueue):
+            if ((newTimeCode - self.ValueQueue[0]['t']) >= self.MaxTimeInQueue):
                 self.ValueQueue.popleft()
             else:
                 break
@@ -411,7 +411,7 @@ class CAccelerationValue():
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.
         while (len(self.ValueQueue) > 0):
-            if ((timeCode - self.ValueQueue[0]['t']) > self.MaxTimeInQueue):
+            if ((timeCode - self.ValueQueue[0]['t']) >= self.MaxTimeInQueue):
                 self.ValueQueue.popleft()
             else:
                 break
@@ -508,7 +508,7 @@ class CDeltaValue():
 
         # Pop any values that are older than we need.
         while (len(self.ValueQueue) > 0):
-            if ((timeCode - self.ValueQueue[0]['t']) > self.MaxTimeInQueue):
+            if ((timeCode - self.ValueQueue[0]['t']) >= self.MaxTimeInQueue):
                 self.ValueQueue.popleft()
             else:
                 break
@@ -587,7 +587,7 @@ class CSum():
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.
         while (len(self.ValueQueue) > 0):
-            if ((timeCode - self.ValueQueue[0]['t']) > self.MaxTimeInQueue):
+            if ((timeCode - self.ValueQueue[0]['t']) >= self.MaxTimeInQueue):
                 self.TotalValue = self.TotalValue - self.ValueQueue[0]['v']
                 self.ValueQueue.popleft()
             else:
@@ -661,7 +661,7 @@ class CRunningAvgValue():
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.
         while (len(self.ValueQueue) > 0):
-            if ((timeCode - self.ValueQueue[0]['t']) > self.MaxTimeInQueue):
+            if ((timeCode - self.ValueQueue[0]['t']) >= self.MaxTimeInQueue):
                 self.TotalValue = self.TotalValue - self.ValueQueue[0]['v']
                 self.ValueQueue.popleft()
             else:
@@ -735,7 +735,7 @@ class CRateValue():
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.
         while (len(self.ValueQueue) > 0):
-            if ((timeCode - self.ValueQueue[0]['t']) > self.MaxTimeInQueue):
+            if ((timeCode - self.ValueQueue[0]['t']) >= self.MaxTimeInQueue):
                 self.ValueQueue.popleft()
             else:
                 break
@@ -885,7 +885,7 @@ class CBollingerValue():
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.
         while (len(self.ValueQueue) > 0):
-            if ((timeCode - self.ValueQueue[0]['t']) > self.MaxTimeInQueue):
+            if ((timeCode - self.ValueQueue[0]['t']) >= self.MaxTimeInQueue):
                 self.TotalValue = self.TotalValue - self.ValueQueue[0]['v']
                 self.ValueQueue.popleft()
             else:
@@ -975,7 +975,7 @@ class CRangeValue():
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.
         while (len(self.ValueQueue) > 0):
-            if ((timeCode - self.ValueQueue[0]['t']) > self.MaxTimeInQueue):
+            if ((timeCode - self.ValueQueue[0]['t']) >= self.MaxTimeInQueue):
                 if ((self.MinValue == self.ValueQueue[0]['v']) or (self.MaxValue == self.ValueQueue[0]['v'])):
                     self.MaxValue = tdf.TDF_INVALID_VALUE
                     self.MinValue = tdf.TDF_INVALID_VALUE
@@ -1014,13 +1014,13 @@ class CRangeValue():
                 or (len(self.ValueQueue) <= 1)):
             return tdf.TDF_INVALID_VALUE
 
-        result = float(self.MaxValue - self.MinValue)
-
-        if ((not self.fAbsolute) and (self.MinValue != 0)):
-            if (self.MinValue == 0):
-                result = 0
-            else:
-                result = float(result / self.MinValue)
+        if (self.fAbsolute):
+            result = float(self.MaxValue - self.MinValue)
+        elif (self.MinValue != 0):
+            result = float(self.MaxValue - self.MinValue)
+            result = float(result / self.MinValue)
+        else:
+            result = 0
 
         return result
     # End of ComputeNewValue
@@ -1074,7 +1074,7 @@ class CPercentChangeValue():
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.
         while (len(self.ValueQueue) > 0):
-            if ((timeCode - self.ValueQueue[0]['t']) > self.MaxTimeInQueue):
+            if ((timeCode - self.ValueQueue[0]['t']) >= self.MaxTimeInQueue):
                 if (self.lowestValue == self.ValueQueue[0]['v']):
                     self.lowestValue = tdf.TDF_INVALID_VALUE
 
@@ -1166,7 +1166,7 @@ class CThresholdValue():
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.
         while (len(self.ValueQueue) > 0):
-            if ((timeCode - self.ValueQueue[0]['t']) > self.MaxTimeInQueue):
+            if ((timeCode - self.ValueQueue[0]['t']) >= self.MaxTimeInQueue):
                 if ((self.MinValue == self.ValueQueue[0]['v']) or (self.MaxValue == self.ValueQueue[0]['v'])):
                     self.MaxValue = tdf.TDF_INVALID_VALUE
                     self.MinValue = tdf.TDF_INVALID_VALUE
@@ -1264,7 +1264,7 @@ class CVolatilityValue():
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.
         while (len(self.ValueQueue) > 0):
-            if ((timeCode - self.ValueQueue[0]['t']) > self.MaxTimeInQueue):
+            if ((timeCode - self.ValueQueue[0]['t']) >= self.MaxTimeInQueue):
                 #if ((self.MinValue == self.ValueQueue[0]['v']) or (self.MaxValue == self.ValueQueue[0]['v'])):
                 self.ValueQueue.popleft()
             else:
@@ -1289,7 +1289,8 @@ class CVolatilityValue():
 
         numChanges = len(self.ValueQueue) - 1
         if (numChanges <= 0):
-            return 0
+            return tdf.TDF_INVALID_VALUE
+
         return (totalChange / numChanges)
     # End of ComputeNewValue
 
@@ -1352,21 +1353,29 @@ class CRSIValue():
         # Prune old items that are now more than N days before the new item.
         # This will leave only items with the past N days in the list.
         while (len(self.ValueQueue) > 0):
-            if ((timeCode - self.ValueQueue[0]['t']) > self.MaxTimeInQueue):
+            if ((timeCode - self.ValueQueue[0]['t']) >= self.MaxTimeInQueue):
                 #if ((self.MinValue == self.ValueQueue[0]['v']) or (self.MaxValue == self.ValueQueue[0]['v'])):
                 self.ValueQueue.popleft()
             else:
                 break
         # End - while (True):
 
+        numValues = len(self.ValueQueue)
+        fAddNewValue = True
+        if ((self.TimeGranularity == tdf.TDF_TIME_GRANULARITY_DAYS) 
+                and (numValues > 0) 
+                and (timeInDays == self.ValueQueue[numValues - 1]['t'])):
+            self.ValueQueue[numValues - 1]['v'] = value
+            fAddNewValue = False
+
         # Items are added to the list as LIFO, so oldest item is index [0] and
         # new items are added to the right
         # We visit items in increasing time order, so the list is always appended with
         # newer items on the right.
-        self.ValueQueue.append({'v': value, 't': timeCode})
+        if (fAddNewValue):
+            self.ValueQueue.append({'v': value, 't': timeCode})
 
         # Make a list of gains and losses
-        numValues = len(self.ValueQueue)
         numValueChanges = numValues - 1
         oldVal = self.ValueQueue[0]['v']
         for index in range(1, numValues):

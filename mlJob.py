@@ -326,7 +326,7 @@ g_NameToWhenIDDict = {
             "afterday": tdf.VALUE_WHEN_AFTER_DAY_ID,
             "atseqenceend": tdf.VALUE_WHEN_AT_SEQUENCE_END_ID,
             "aftersequenceend": tdf.VALUE_WHEN_AFTER_SEQUENCE_END_ID,
-            "ever": tdf.VALUE_WHEN_EVER_ID }
+            "ever": tdf.VALUE_WHEN_EVER_ID}
 
 # <Data>
 DATA_ELEMENT_NAME = "Data"
@@ -2876,7 +2876,7 @@ class MLJob():
             return []
 
         varName = partsList[0].lstrip().rstrip()
-        return [ varName ]
+        return [varName]
     # End of GetInputCriteriaVarList
 
 
@@ -2890,9 +2890,7 @@ class MLJob():
     #   fFoundIt, varName, relationID, value1, value2
     #####################################################
     def GetInputCriteriaInfo(self):
-        fValid = False
         varName = ""
-        relation = ""
         value1 = tdf.TDF_INVALID_VALUE
         value2 = tdf.TDF_INVALID_VALUE
 
@@ -2974,11 +2972,9 @@ class MLJob():
     #   fFoundIt, outputSourceID, varName, relationID, value1, value2, whenTimeID
     #####################################################
     def GetNetworkOutputInfo(self):
-        fValid = False
         outputSourceStr = None
         outputSourceID = -1
         varName = None
-        relationStr = None
         relationID = -1
         value1 = -1
         value2 = -1

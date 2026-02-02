@@ -1318,18 +1318,10 @@ class TDFFileReader():
     # This returns one list of values, and is used when we 
     # preflight.
     #####################################################
-    def GetRawValues(self, valueName, fUniqueValues, fOnlyOneValuePerTimeEntry):
+    def GetRawValues(self, nameStem, fUniqueValues, fOnlyOneValuePerTimeEntry):
         prevValue = TDF_INVALID_VALUE
         prevTimeCode = -1
         valueList = []
-
-        # Get information about the requested variables. This splits
-        # complicated name values like "eGFR[-30]" into a name and an 
-        # offset, like "eGFR" and "-30"
-        labInfo, nameStem, _, _, _, functionName = TDF_ParseOneVariableName(valueName)
-        if (labInfo is None):
-            TDF_Log("!Error! Cannot parse variable: " + valueName)
-            return valueList
 
         # This loop will iterate over each step in the timeline.
         for timeLineIndex in range(self.LastTimeLineIndex + 1):
@@ -3871,11 +3863,11 @@ class TDFFileReader():
             # If we want to correlate things like a daily med and a lab from morning labs, they
             # may appear at different times on the same day.
             foundNewValue1, value1, matchingRangeDay = self.GetNamedValueFromTimeline(nameStem1, 
-                                                                    valueOffset1, valueOffset1, -1,
+                                                                    valueOffset1, valueOffset1, VARIABLE_RANGE_SIMPLE,
                                                                     functionObject1,
                                                                     timeLineIndex, matchingRangeDay)
             foundNewValue2, value2, matchingRangeDay = self.GetNamedValueFromTimeline(nameStem2, 
-                                                                    valueOffset2, valueOffset2, -1,
+                                                                    valueOffset2, valueOffset2, VARIABLE_RANGE_SIMPLE,
                                                                     functionObject2,
                                                                     timeLineIndex, matchingRangeDay)
 
@@ -4095,9 +4087,8 @@ def TDF_ParseOneVariableName(valueName):
 #   fFoundIt, varName, relationID, value1, value2
 #####################################################
 def TDF_ParseCriteriaString(criteriaStr):
-    fValid = False
     varName = ""
-    relation = ""
+    relationStr = ""
     relationID = VALUE_RELATION_NONE_ID
     value1 = TDF_INVALID_VALUE
     value2 = TDF_INVALID_VALUE

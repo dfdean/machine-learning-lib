@@ -50,11 +50,11 @@ import sys
 import math
 import copy
 from datetime import datetime
-import random
+#import random
 import uuid as UUID
 
-import statistics
-from scipy import stats
+#import statistics
+#from scipy import stats
 from scipy.stats import spearmanr
 
 # Normally we have to set the search path to load these.
@@ -249,11 +249,9 @@ class TimeValueMatrix():
             if (currentDay < 0):
                 print("TimeValueMatrix::CheckEntry Error! Negative Day")
                 raise Exception()
-                sys.exit(0)
             if (currentDay < prevDay):
                 print("TimeValueMatrix::CheckEntry Error! Out of order entries")
                 raise Exception()
-                sys.exit(0)
             prevDay = currentDay
         # End - for currentDay in dayNumList:
 
@@ -262,7 +260,6 @@ class TimeValueMatrix():
             if (currentVal == tdf.TDF_INVALID_VALUE):
                 print("TimeValueMatrix::CheckEntry Error! Invalid Value")
                 raise Exception()
-                sys.exit(0)
         # End - for currentVal in valueList:
     # End - CheckEntry()
 
@@ -340,7 +337,7 @@ class TimeValueMatrix():
                                                 tdf.TDF_TIME_GRANULARITY_SECONDS, 
                                                 fCarryForwardPreviousDataValues)
         if (srcTDF is None):
-            print("MakeFromTDF Error opening src file: " + srcFilePathName)
+            print("MakeFromTDF Error opening src file: " + tvMatrixFilePathName)
             return
  
         # Save the parameters. This may also clobber a previous file state.
@@ -348,6 +345,14 @@ class TimeValueMatrix():
         self.valueName = valueName
         self.derivedFromFileUUID = srcTDF.GetFileUUIDStr()
         
+        # Get information about the requested variables. This splits
+        # complicated name values like "eGFR[-30]" into a name and an 
+        # offset, like "eGFR" and "-30"
+        labInfo, nameStem, _, _, _, _ = tdf.TDF_ParseOneVariableName(valueName)
+        if (labInfo is None):
+            print("!Error! Cannot parse variable: " + valueName)
+            return
+
         # Iterate over every timeline
         fFoundTimeline = srcTDF.GotoFirstTimeline()
         while (fFoundTimeline):
@@ -357,7 +362,7 @@ class TimeValueMatrix():
                 sys.exit(0)
             
             # Split it up into entries
-            entryList = srcTDF.GetRawValues(valueName, fUniqueValues, fOnlyOneValuePerDay)
+            entryList = srcTDF.GetRawValues(nameStem, fUniqueValues, fOnlyOneValuePerDay)
             numEntries = len(entryList)
             if (numEntries <= 0):
                 fFoundTimeline = srcTDF.GotoNextTimeline()
@@ -393,15 +398,14 @@ class TimeValueMatrix():
 
     #####################################################
     #
-    # [TimeValueMatrix::MakeFromTDFAndSelectRanges]
+    # [TimeValueMatrix::SelectRangesFromTDF]
     #
     # This creates a new TVMatrix for 1 specific value in a TDF file.
     #####################################################
-    def MakeFromTDFAndSelectRanges(self, tvMatrixFilePathName, valueName, selectOp, minValue, maxValue):
+    def SelectRangesFromTDF(self, tvMatrixFilePathName, valueName, selectOp, minValue, maxValue):
         fOnlyOneValuePerDay = False
         fUniqueValues = False
         currentTimelineID = -1
-        totalNumSequencesSaved = 0
         numSeqsEnterRange = 0
         numSeqsLeaveBottomRange = 0
         numSeqsLeaveUpperRange = 0
@@ -412,9 +416,17 @@ class TimeValueMatrix():
                                                 tdf.TDF_TIME_GRANULARITY_SECONDS, 
                                                 fCarryForwardPreviousDataValues)
         if (srcTDF is None):
-            print("MakeFromTDF Error opening src file: " + srcFilePathName)
+            print("MakeFromTDF Error opening src file: " + tvMatrixFilePathName)
             return resultsDict
  
+        # Get information about the requested variables. This splits
+        # complicated name values like "eGFR[-30]" into a name and an 
+        # offset, like "eGFR" and "-30"
+        labInfo, nameStem, _, _, _, _ = tdf.TDF_ParseOneVariableName(valueName)
+        if (labInfo is None):
+            print("!Error! Cannot parse variable: " + valueName)
+            return resultsDict
+
         # Save the parameters. This may also clobber a previous file state.
         self.timelineList = []
         self.valueName = valueName
@@ -427,9 +439,10 @@ class TimeValueMatrix():
             if (currentTimelineID < 0):
                 print("ERROR! Bad currentTimelineID: " + str(currentTimelineID))
                 sys.exit(0)
+            totalNumSequencesSaved = 0
             
             # Split it up into entries
-            entryList = srcTDF.GetRawValues(valueName, fUniqueValues, fOnlyOneValuePerDay)
+            entryList = srcTDF.GetRawValues(nameStem, fUniqueValues, fOnlyOneValuePerDay)
             numEntries = len(entryList)
             if (numEntries <= 0):
                 fFoundTimeline = srcTDF.GotoNextTimeline()
@@ -473,7 +486,7 @@ class TimeValueMatrix():
 
                 # Optionally save the list
                 if (fSaveList):
-                   if (numSavedEntries > 0):
+                    if (numSavedEntries > 0):
                         # Trim the sequence to the final size
                         dayNumList = dayNumList[:numSavedEntries]
                         secNumList = secNumList[:numSavedEntries]
@@ -494,9 +507,8 @@ class TimeValueMatrix():
 
                         totalNumSequencesSaved += 1
                         numSavedEntries = 0
-                   # End - if (numSavedEntries > 0):
-
-                   fSaveList = False
+                    # End - if (numSavedEntries > 0):
+                    fSaveList = False
                 # End - if (fSaveList):
 
                 # Lists should be contiguous, so if we did not add this value to the current list then reset the list
@@ -553,7 +565,7 @@ class TimeValueMatrix():
         resultsDict['numSeqsLeaveBottomRange'] = numSeqsLeaveBottomRange
         resultsDict['numSeqsLeaveUpperRange'] = numSeqsLeaveUpperRange
         return resultsDict
-    # End - MakeFromTDFAndSelectRanges
+    # End - SelectRangesFromTDF
 
 
 
@@ -895,9 +907,6 @@ class TimeValueMatrix():
     # This should not have to be used during normal operation.
     #####################################################
     def ImportAndFix(self, newFilePath, oldFilePath):
-        self.MainDict = {}
-        self.fFileIsRead = False
-
         # Open the src file
         try:
             srcFileH = open(oldFilePath, 'r') 
@@ -936,11 +945,8 @@ class TimeValueMatrix():
                 break
         # End - while True
 
-        # Fix the header
-        self.createDateStr = "Aug-22-2025 13:54"
-        commentStr = "Covariance Between All Rows in CKDTVMatrixFilteredTimelineLengthOver10.txt"
-
         # Write a new fixed header to the dest file
+        commentStr = "Covariance Between All Rows in CKDTVMatrixFilteredTimelineLengthOver10.txt"
         self.WriteFileHeader(destFileH, commentStr)
 
         # Each iteration reads one line of the <Edges> section.
@@ -1155,6 +1161,7 @@ class TimeValueMatrix():
         self.fileUUID = str(UUID.uuid4())
 
         if (len(self.timelineList) <= 0):
+            self.timelineList = newTimelineList
             return
 
         for srcRow in self.timelineList:
@@ -1653,12 +1660,13 @@ class TimeValueMatrix():
             srcValueList = srcRow['v'] 
             if (propertyName == TV_MATRIX_TIMELINE_PROPERTY_LENGTH):
                 value = len(srcValueList)
-            if (propertyName == TV_MATRIX_TIMELINE_PROPERTY_DURATION):
+            elif (propertyName == TV_MATRIX_TIMELINE_PROPERTY_DURATION):
                 dayNumList = srcRow['d'] 
                 listLen = len(dayNumList)
                 value = dayNumList[listLen - 1] - dayNumList[0]
             else:
-                value = 0
+                raise Exception()
+                return
 
             preFlight.AddValue(value)
             # End - for currentVal in srcValueList:
@@ -1674,7 +1682,7 @@ class TimeValueMatrix():
             srcValueList = srcRow['v'] 
             if (propertyName == TV_MATRIX_TIMELINE_PROPERTY_LENGTH):
                 value = len(srcValueList)
-            if (propertyName == TV_MATRIX_TIMELINE_PROPERTY_DURATION):
+            elif (propertyName == TV_MATRIX_TIMELINE_PROPERTY_DURATION):
                 dayNumList = srcRow['d'] 
                 listLen = len(dayNumList)
                 value = dayNumList[listLen - 1] - dayNumList[0]
@@ -1869,9 +1877,6 @@ class TimeValueMatrix():
     #####################################################
     def StartBothListsAtSameDiseaseLevel(self, timelineEntry1, timelineEntry2, 
                                     fHigherIsHealthier, lastHealthyValue, valueErrorRange):
-        offset = 0
-        startOffset1 = 0
-        startOffset2 = 0
         fRemoveFromList1 = False
 
         # Discard healthy values in both lists
@@ -2104,12 +2109,7 @@ class TimeValueMatrix():
                 continue
 
             # At this point, do an insertion.
-            # <><><><>
             totalDimeDelta = currentDay - prevDay
-            # Hang a breakpoint here
-            if (totalDimeDelta <= 0):
-                totalDimeDelta = totalDimeDelta
-
             timeDeltaUntilNewInsertionDate = newDate - prevDay
             fractionOfChangeToNewDate = float(float(timeDeltaUntilNewInsertionDate) / float(totalDimeDelta))
 
@@ -2185,6 +2185,9 @@ class TimeValueMatrix():
             correlation = tdf.TDF_INVALID_VALUE
             pass
     
+        if (math.isnan(correlation)):
+            correlation = tdf.TDF_INVALID_VALUE
+
         return correlation
     # End - GetCovarianceBetweenTwoRows
 
@@ -2378,7 +2381,7 @@ def CreateTimeValueMatrixFromTDF(tvMatrixFilePathName, valueName):
 ################################################################################
 def MakeTimeValueMatrixFromSelectionsOfTDF(tvMatrixFilePathName, valueName, selectOp, minValue, maxValue):
     newTVMatrix = TimeValueMatrix()
-    resultsDict = newTVMatrix.MakeFromTDFAndSelectRanges(tvMatrixFilePathName, valueName, selectOp, minValue, maxValue)
+    resultsDict = newTVMatrix.SelectRangesFromTDF(tvMatrixFilePathName, valueName, selectOp, minValue, maxValue)
     return newTVMatrix, resultsDict
 # End - MakeTimeValueMatrixFromSelectionsOfTDF
 

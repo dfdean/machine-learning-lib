@@ -559,12 +559,12 @@ class GroupingFile():
     #
     #####################################################
     def DrawOneAverageSequence(self, tvMatrix, memberList, 
-                            fHigherIsHealthier, lastHealthyValue, valueErrorRange,
-                            curveFilePathName):
+                            minValue, maxValue, fHigherIsHealthier, 
+                            lastHealthyValue, valueErrorRange, curveFilePathName):
         # Initialize a list of sequences that start at each GFR in the range we are interested in.
         dayInAvgList = [0]
-        sumForDayInAvgList = [0]
-        countForDayInAvgList = [0]
+        sumForDayInAvgList = [0.0]
+        countForDayInAvgList = [0.0]
 
         # Add each member ID to the range
         for memberID in memberList:
@@ -614,7 +614,7 @@ class GroupingFile():
         avgValList = [0.0] * numAvgEntries
         for valIndex in range(numAvgEntries):
             if (countForDayInAvgList[valIndex] > 0):
-                avgValList[valIndex] = round(float(sumForDayInAvgList[valIndex] / countForDayInAvgList[valIndex]), 1)
+                avgValList[valIndex] = round(float(float(sumForDayInAvgList[valIndex]) / float(countForDayInAvgList[valIndex])), 1)
         # End - for valIndex in range(numAvgEntries):            
 
 
@@ -634,7 +634,8 @@ class GroupingFile():
     #
     #####################################################
     def DrawAllAverageSequences(self, tvMatrix, 
-                            fHigherIsHealthier, lastHealthyValue, valueErrorRange,
+                            minValue, maxValue, fHigherIsHealthier, 
+                            lastHealthyValue, valueErrorRange,
                             curveFilePathNameDir):
         # Create a new empty directory or else empty an existing directory
         if os.path.exists(curveFilePathNameDir):
@@ -654,7 +655,8 @@ class GroupingFile():
         for _, (groupName, memberList) in enumerate(self.MainDict.items()):
             curveFilePathName = curveFilePathNameDir + str(groupNumNum) + ".jpg"
             self.DrawOneAverageSequence(tvMatrix, memberList, 
-                                        fHigherIsHealthier, lastHealthyValue, valueErrorRange,
+                                        minValue, maxValue, fHigherIsHealthier, 
+                                        lastHealthyValue, valueErrorRange,
                                         curveFilePathName)
 
             groupNumNum += 1

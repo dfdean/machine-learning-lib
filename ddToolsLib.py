@@ -36,7 +36,7 @@
 #
 ################################################################################
 import os
-#import sys
+import sys
 #import configparser
 import shutil as shutil
 from datetime import datetime
@@ -453,6 +453,29 @@ def CopyFilesWithSuffix(srcDirPathName, destDirPathName, fileSuffix):
 
 
 
+
+
+
+
+################################################################################
+#
+# [RunProcessAtHighPriority]
+#
+################################################################################
+def RunProcessAtHighPriority():
+    if (sys.platform == "win32"):
+        import win32api, win32process, win32con
+        pid = win32api.GetCurrentProcessId()
+        procHandle = win32api.OpenProcess(win32con.PROCESS_ALL_ACCESS, True, pid)
+        win32process.SetPriorityClass(procHandle, win32process.HIGH_PRIORITY_CLASS)
+    else:
+        try:
+            niceValue = os.nice(-20)
+            niceValue = os.nice(0)
+            print("RunProcessAtHighPriority: Run at nice level: " + str(niceValue))
+        except:
+            print("RunProcessAtHighPriority: Not allowed to change priority")    
+# End - RunProcessAtHighPriority()
 
 
 

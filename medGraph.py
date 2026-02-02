@@ -45,10 +45,12 @@
 ################################################################################
 import os
 import sys
+import math
 from datetime import datetime
 import uuid as UUID
 
 import xmlTools as dxml
+import tdfFile as tdf
 import medHistogram as MedHistogram
 import groupingFile as GroupingFile
 
@@ -631,11 +633,11 @@ class MedGraphFile():
             return
 
         destFileH.write(self.WriteBuffer)
+        destFileH.flush()
+        destFileH.close()
+
         self.WriteBuffer = ""
         self.NumBufferedLines = 0
-
-        #destFileH.flush()
-        destFileH.close()
     # End - Flush
 
 
@@ -783,19 +785,24 @@ class MedGraphFile():
 
 
     #####################################################
+    #
     # GroupNodesIntoCliques
+    #
+    # NOTE: correlations range between -1..0..1 so they may be negative.
+    # We do not use abs(), since we want things that closely correlate, not
+    # are negative predictors and negatively correlate.
     #####################################################
-    def GroupNodesIntoCliques(self, thresholdForGroupAssociation, dictFilePathName):
+    def GroupNodesIntoCliques(self, thresholdForGroupAssociation, minCliqueSize, dictFilePathName):
         currentGroups = {}
         nextGroupID = 1
 
         if (not self.fFileIsRead):
             self.ReadFile()
 
-        # Look at every node in the list and add it to a group.
+        # Look at every node in the list and add it to one group.
+        matchingGroupID = -100
+        matchingGroupEdgeWeight = 0
         for _, (startNodeName, rowDict) in enumerate(self.MainDict.items()):
-            matchingGroupIDList = []
-
             # Examine each current group to see if there is one close to this node
             for _, (groupID, groupInfo) in enumerate(currentGroups.items()):
                 groupMembers = groupInfo['m']
@@ -809,66 +816,57 @@ class MedGraphFile():
                 # Otherwise, you add nodes that are close to a node on the periphery of the group but
                 # not the rest of the growp and it slowly expands to cover the whole graph.
                 fNodeBelongsInCurrentGroup = True
+                weakestMatchWeight = 0
                 for memberNodeName in groupMembers:
                     fFoundEdge, edgeWeightStr = self.GetEdge(startNodeName, memberNodeName)
                     if (not fFoundEdge):
                         fFoundEdge, edgeWeightStr = self.GetEdge(memberNodeName, startNodeName)
 
                     if (not fFoundEdge):
-                        print("ACK. No edge found.")
+                        print("GroupNodesIntoCliques Error. No edge found.")
                         fNodeBelongsInCurrentGroup = False
                         break
 
                     try:
                         edgeWeightFloat = float(edgeWeightStr)
                     except Exception:
-                        print("ACK. Invalid Edge Weight.")
+                        print("GroupNodesIntoCliques Error. Invalid Edge Weight.")
                         fNodeBelongsInCurrentGroup = False
                         break
+
+                    if ((edgeWeightFloat == tdf.TDF_INVALID_VALUE) or (math.isnan(edgeWeightFloat))):
+                        continue
 
                     if (edgeWeightFloat < thresholdForGroupAssociation):
                         fNodeBelongsInCurrentGroup = False
                         break
+
+                    if ((weakestMatchWeight == 0) or (edgeWeightFloat < weakestMatchWeight)):
+                        weakestMatchWeight = edgeWeightFloat
                 # End - for memberNodeName in groupMembers:
 
-                # If there is a match, keep looking for more groups.
-                # One node may be the missing link between two separate groups.
-                if (fNodeBelongsInCurrentGroup):
-                    matchingGroupIDList.append(groupID)
+                # If there is a match, then stop looking for more groups.
+                # One node may be close to two separate groups, BUT the other nodes in those 
+                # groups are not close to each other or else they would not have formed separate groups.
+                # Really, we should pick the closest neighbor.
+                if ((fNodeBelongsInCurrentGroup) and (weakestMatchWeight > 0)):
+                    if ((matchingGroupEdgeWeight == 0) or (weakestMatchWeight > matchingGroupEdgeWeight)):
+                        matchingGroupID = groupID
+                        matchingGroupEdgeWeight = weakestMatchWeight
             # End - for _, (groupID, groupInfo) in enumerate(rowDict.items()):
 
 
             # If there are no matching groups, then make a new group
-            if (len(matchingGroupIDList) == 0):
+            if (matchingGroupID < 0):
                 newGroupMembersList = [startNodeName]
                 newGroupInfo = {'id': nextGroupID, 'm': newGroupMembersList}
                 currentGroups[nextGroupID] = newGroupInfo
                 nextGroupID += 1
             # If there is one matching group, then add the node to this group
-            elif (len(matchingGroupIDList) == 1):
-                groupID = matchingGroupIDList[0]
-                groupInfo = currentGroups[groupID]
+            else:
+                groupInfo = currentGroups[matchingGroupID]
                 groupMembers = groupInfo['m']
                 groupMembers.append(startNodeName)
-            # Otherwise, this is a connector node that combines several groups.
-            else:
-                newGroupMembersList = [startNodeName]
-                # Add in all members of the previous groups
-                for childGroupID in matchingGroupIDList:
-                    childGroupInfo = currentGroups[childGroupID]
-                    childGroupMembers = childGroupInfo['m']
-                    for childNode in childGroupMembers:
-                        newGroupMembersList.append(childNode)
-                    # End - for childNode in childGroupMembers:
-
-                    # Remove the old list.
-                    del currentGroups[childGroupID]
-                # End - for childGroupID in matchingGroupIDList:
-
-                newGroupInfo = {'id': nextGroupID, 'm': newGroupMembersList}
-                currentGroups[nextGroupID] = newGroupInfo
-                nextGroupID += 1
-            # End - else
         # End - for _, (startNodeName, rowDict) in enumerate(self.MainDict.items()):
 
 
@@ -876,7 +874,8 @@ class MedGraphFile():
         groupListFile = GroupingFile.CreateEmptyGroupingFile(dictFilePathName)
         for _, (groupID, groupInfo) in enumerate(currentGroups.items()):
             groupMembers = groupInfo['m']
-            groupListFile.AddGroup(groupID, groupMembers)
+            if (len(groupMembers) > minCliqueSize):
+                groupListFile.AddGroup(groupID, groupMembers)
         # End - for _, (startNodeName, rowDict) in enumerate(self.MainDict.items()):
 
         groupListFile.SetDerivedFileUUID(self.fileUUID)

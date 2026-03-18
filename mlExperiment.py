@@ -463,10 +463,6 @@ def GetCorrelationBetweenTwoVars(
                     avgOfHomogenousTimelineResultFileInfo):
     listOfAllCorrelations = []
 
-    fFoundIt, criteriaVarName, criteriaRelationID, criteriaValue1, criteriaValue2 = tdf.TDF_ParseCriteriaString(criteriaStr)
-    # It is OK for fFoundIt to be false. That just means no criteria apply.
-    # if (not fFoundIt): - print("Dont Panic Dude!")
-
     # It is possible we already found this correlation on a previous instance
     # of this program that crashed. In this case, we are running on a restarted
     # process, so do not waste time recomputing work that is already done.
@@ -476,6 +472,10 @@ def GetCorrelationBetweenTwoVars(
     if ((foundIt1) and (foundIt2)):
         return
     # End - if (foundIt)
+
+    fFoundIt, criteriaVarName, criteriaRelationID, criteriaValue1, criteriaValue2 = tdf.TDF_ParseCriteriaString(criteriaStr)
+    # It is OK for fFoundIt to be false. That just means no criteria apply.
+    # if (not fFoundIt): - print("Dont Panic Dude!")
 
     # Get information about the requested variables. This splits
     # complicated name values like "eGFR[-30]" into a name and an 

@@ -64,6 +64,9 @@ g_LabValueInfo = {
     'HgbCBC': {'minVal': 2.0, 'maxVal': 17.0, 'dataType': TDF_DATA_TYPE_FLOAT, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': ""},
     'HgbCBCDiff': {'minVal': 2.0, 'maxVal': 17.0, 'dataType': TDF_DATA_TYPE_FLOAT, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': ""},
     'HgbABG': {'minVal': 2.0, 'maxVal': 17.0, 'dataType': TDF_DATA_TYPE_FLOAT, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': ""},
+
+    'Hct': {'minVal': 3.0, 'maxVal': 51.0, 'dataType': TDF_DATA_TYPE_FLOAT, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': ""},
+
     'HgbPathology': {'minVal': 2.0, 'maxVal': 17.0, 'dataType': TDF_DATA_TYPE_FLOAT, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': ""},
     'WBC': {'minVal': 1.0, 'maxVal': 25.0, 'dataType': TDF_DATA_TYPE_FLOAT, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': "", 'ValueWordIncrement': 0.1},
     'Plt': {'minVal': 30.0, 'maxVal': 500.0, 'dataType': TDF_DATA_TYPE_FLOAT, 'ActionAfterEachTimePeriod': "", 'Calculated': False, 'VariableDependencies': "", 'ValueWordIncrement': 0.1},
